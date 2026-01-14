@@ -1,0 +1,11 @@
+# Minimal Multi-Token Seed - arXiv
+# System will discover from corpus
+
+machine learning|ml|ai
+neural network|nn|ai
+
+# System SHOULD discover:
+# - state of the art|sota|evaluation
+# - convolutional neural network|cnn|ai
+# - natural language processing|nlp|ai
+# - and hundreds more technical terms...

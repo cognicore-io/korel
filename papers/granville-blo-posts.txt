@@ -1,0 +1,408 @@
+In this article, I discuss the main problems of standard LLMs (OpenAI and the likes), and how the new generation of LLMs addresses these issues. The focus is on Enterprise LLMs.
+
+LLMs with Billions of Parameters
+Most of the LLMs still fall in that category. The first ones (ChatGPT) appeared around 2022, though Bert is an early precursor. Most recent books discussing LLMs still define them as transformer architecture with deep neural networks (DNNs), costly training, and reliance on GPUs. The training is optimized to predict the next tokens or missing tokens. However, this task is remotely relevant to what modern LLMs now deliver to the user. Yet it requires time and intensive computer resources. Indeed, this type of architecture works best with billions or trillions of tokens. In the end, most of these tokens are noise, requiring smart distillation for performance improvement.
+
+The main issues are:
+
+Performance: Requires GPU and large corpuses as input data. Re-training is expensive. Hallucinations are still a problem. Fine-tuning is delicate (Blackbox). You need prompt engineering to get the best results. Mixtures of experts (multiple sub-LLMs, DeepSeek) is one step towards improving accuracy.
+Cost: Besides the GPU costs, the pricing model charges by the token, incentivizing vendors to use models with billions of tokens. Yet, a mere million is more than enough for a specialized corporate corpus, especially when not relying on DNNs. While there is a trend to switch between CPU and GPU as needed to minimize costs, we are still a long way from no-latency, in-memory LLMs.
+Old architecture: Innovation consists of improvements to the existing base model. Evaluations metrics miss important qualities such as depth or exhaustivity, and do not take into account the relevancy score attached to prompt results. There is no real attempt to truly innovate: DNNs, old-fashioned training and transformers are the norm. Standard methods such a fixed-size embeddings, vector databases, or cosine similarity are present in most models. Contextual elements such as corpus taxonomy are not properly leveraged. Chunking, evaluation and reinforcement learning haven’t changed much.
+Adaptability: Generic models are not well suited to particular domains such as healthcare or finance. They may be hard to deploy on-premises. Few models communicate with others to get the best of all. Also, they rely on the same stemming, stopwords and other NLP techniques, without adaptation to specific sub-corpuses. Perhaps the most prominent mechanism for adaptability is the use of agents.
+Usability: UIs consist of a prompt search with limited functionalities. While it takes into account past prompts within a session, it comes with few if any parameters for fine-tuning by the end user. Typically, there is no or limited user customization.
+Security: Hallucinations are still present but tend to become more subtle. It makes it difficult to detect them. Access to external APIs, external data storage or processing, augmentation with external corpuses, business decisions based on hallucinations, and extensive rewording of the original material — without accurate referencing — create risks and liabilities. Python libraries (stemming, autocorrect and so on) are faulty. Developers may not always be aware of important glitches in these libraries, and workarounds. Replicability is sometimes an issue.
+In the next section, I discuss truly innovative developments to LLMs. These are techniques and features that power the next generation of large language models, that is, LLM 2.0.
+
+The Rise of Specialized LLMs for Enterprise
+LLM 2.0, The NextGen AI Systems for Enterprise
+Here, I describe some of the powerful features and components that we recently implemented in our LLM 2.0 technology, known as xLLM for Enterprise. We are moving away from “bigger is better”, abandoning GPU, next-token prediction via costly training, transformers, DNNs, and a good chunk of standard techniques. To mirror the previous section, I break it down into the same categories.
+
+Performance: In-memory LLMs with real-time fine-tuning, zero weight, no DNN, no latency. Short lists of long tokens and multi-tokens rather than long lists of short tokens. No hallucinations, see here. Focus on depth, exhaustivity yet conciseness, and structured output in prompt results. Contextual and regular tokens, with the former found in contextual elements retrieved from the corpus, or added post-crawling: categories, tags, titles, index keywords, glossary, table of contents, search agents (“how to”, “what is”, “case studies”, “find table”) and so on. One sub-LLM per top corpus category (HR, marketing, finance, sales, and so on). Infinite contextual window thanks to contextual elements attached to chunks during the crawl or post-crawling.
+Cost: Focus on ROI. Far less expensive than standard models, yet much faster, more accurate, exhaustive, with results ordered by relevancy.
+New architecture: Use of sorted n-grams, acronyms and synonyms tables as well as smart stemming to guarantee exhaustivity in prompt results. Relevancy engine to select few but best items to show to the user, out of a large list of candidates. Hierarchical chunking and multi-index. Vector databases replaced by very fast home-made architecture ideal for sparse keyword data. Cosine similarity replaced by PMI. Variable-length embeddings. Un-stemming. Backend tables stored as nested hashes with redundant tables for fast retrieval, including transposed nested hashes. Input corpus transformed into standardized JSON-like format, whether it comes from PDF repository, public or private website, several databases, or a combination of all. Self-tuning.
+Adaptability: Stopwords and stemmers specific to corpus or sub-corpus. Home-made action agents for enterprise customers. In particular: predictive analytics on retrieved tables, best tabular synthetic data generation on the market (NoGAN, see here), taxonomy creation or augmentation, unstructured text clustering, auto-tagging. On-premises built. User customization via intuitive parameters. Names and number of contextual elements specific to each chunk.
+Usability: Rich UI allows the user to select agents, select sub-LLMs, fine-tune parameters in real time, run suggested alternate prompts in one click from keyword graph linked to prompt. Display 10-20 cards with summary information (title, tag, category, relevancy score, time stamp, chunk size, and so on) allowing the user to click on the ones he is interested in to get full information with precise corpus reference. Options: search by recency, exact or broad search, negative keywords, search with higher weight on first prompt token. No-code debugging mode for end users. Pre-made results and caching for top prompts. All this significantly reduces the need for prompt engineering.
+Security: Full control on all components, no external API calls to OpenAI and the likes, no reliance on external data. Home-made, built from scratch with explainable AI. On-premises implementation is possible. Encryption.
+Despite specialization, the technology adapts easily to many industries. Calling it a small LLM is a misnomer, since you can blend many of them to cover a large corpus or multiple corpuses. Finally, while a key selling point is simplicity, the technology is far from simplistic. In some ways, while almost math-free, it is more complex than DNNs, due to the large number of optimized components — some found nowhere else — and their complex interactions.
+
+
+Standard benchmarking techniques using LLM as a judge have strong limitations. First it creates a circular loop and reflects the flaws present in the AI judges. Then, the perceived quality depends on the end user: an enterprise LLM appeals to professionals and business people, while a generic one appeals to laymen. The two have almost opposite criteria to assess the value. Finally, benchmarking metrics currently in use fail to capture many of the unique features of specialized LLMs, such as exhaustivity, or the quality of the relevancy and trustworthiness scores attached to each element in the response. In fact, besides xLLM, very few if any LLMs display such scores to the user.
+
+I now discuss these points, as well as the choice of test prompts, and preliminary results about xLLM, compared to others.
+
+Structured output vs standard response
+A peculiarity of xLLM is that if offers two types of responses. The top layer is the classic response, though much less reworded than in other systems to keep it close to the original corpus, and well organized. The layer below — we call it the structured output — is accessible to authorized end users via the UI; it displays clickable summary boxes with raw extracts and contextual elements (title, category, tags, timestamp, contact person and so on). It also shows relevancy and trustworthiness scores:
+
+Trustworthiness score: it tells you how trustworthy the input source is, for each summary box. In particular, if the same information is found in two different input sources but with a mismatch, the trustworthiness score tells you which one is most reliable.
+Relevancy score: it tells you how relevant a summary box is to your prompt.
+The structured output provides very precise links to where the information is coming from. Also, models based mostly on transformers are not able to generate meaningful trustworthiness scores, as each sentence in the response blends elements from multiple sources — some good, some not so good — in addition to transition and other words coming from a Blackbox.
+
+
+One layer below the structured output (prompt: “Restricted Stock Unit Grant”)
+There is currently no benchmarking metrics to assess the quality of the scores, or to adapt the metrics to take into account these scores. For instance, a low-score response element should not be penalized because it’s poor; xLLM knows it’s poor and signals it to the user. This typically happens when the prompt is irrelevant to the enterprise corpus: xLLM does not make up answers.
+
+Exhaustivity
+In our internal document (available upon request) I describe how to automatically generate a large number of synthetic prompts, matching elements scattered in the corpus, but with transformed wording (synonyms, typos, and so on). Then I check if the relevant chunks are retrieved. On multiple occasions, chunks even better than those used in the test, are found.
+
+Note that xLLM uses high quality home-made lists of acronyms and synonyms, automatically generated with a proprietary algorithm, to handle prompts written in a lingo different from the corpus. It also has its own stemmer and un-stemmer. The goal of all this is to achieve exhaustivity.  Yet, standard benchmarking metrics ignore exhaustivity as it is not obvious how you evaluate it. But we do.
+
+Preliminary results – standard metrics
+The results below were obtained with “LLM as judge”, a method with the drawbacks mentioned earlier. Also, it does not capture important qualities that I just discussed. Finally, it applies to the standard response, not the structured output (classic LLMs don’t share that layer with the user). Despite these caveats, on the corporate corpuses tested, xLLM outperforms the other models.
+
+
+
+The global score is shown in the rightmost column. I used xLLM 1.0 for the test. The new version xLLM 2.0 has many new components that further enhance the response. The global score does not include the ingestion time labeled as “time” in the table. This is a metric where xLLM outshines all others by a long shot.
+
+We are continuously working on improvements, including distillation techniques that further improve quality and reduce time. The original xLLM for developers has its own proprietary database architecture (nested hashes) and allows for lightning-fast fine-tuning, even in real time. Thanks to intuitive parameters attached to the various components, it is easier and faster to post-train than other models, even by a non-expert.
+
+
+Standard LLMs are trained to predict the next tokens or missing tokens. It requires deep neural networks (DNN) with billions or even trillions of tokens, as highlighted by Jensen Huang, CEO of Nvidia, in his keynote talk at the GTC conference earlier this year. Yet, 10 trillion tokens cover all possible string combinations; the vast majority of them is noise. After all, most people have a vocabulary of about 30k words. But this massive training is necessary to prevent DNNs from getting stuck in sub-optimal configurations due to vanishing gradient and other issues.
+
+What if you could do with a million times less? With mere millions of tokens rather than trillions? Afterall, predicting the next token is a task remotely related to what modern LLMs do. Its history is tied to text auto-filling, guessing missing words, autocorrect and so on, developed initially for tools such as BERT. Now, it’s no different than training a plane to efficiently operate on the runway, but not to fly. It also entices LLM vendors to charge clients by token usage, with little regard to ROI.
+
+Our approach is radically different. We do not use DNNs nor GPUs. It is as much different from standard AI than it is from classical NLP and machine learning. Its origins are similar to other tools that we built including NoGAN, our alternative to GAN for tabular data synthetization. NoGAN — a fast technology with no DNN — performs a lot faster with much better results, even in real-time. The output quality is assessed using our ground-breaking evaluation metric capturing important defects missed by all other benchmarking tools.
+
+In this article, I highlight unique components of xLLM, our new architecture for enterprise. In particular, how it can be faster, not using DNNs or GPUs, yet delivers more accurate results at scale without hallucination while minimizing the need for prompt engineering.
+
+No training, smart engine and other components instead
+The xLLM architecture goes beyond traditional LLMs transformed based models; xLLM is not a pre-trained model. The core components that make it innovative are: 
+
+
+Figure 1: Key components of xLLM
+1. Smart Engine
+
+The foundation of xLLM is enterprise data (PDFs, web, systems, etc.) The base model does not require training. It retrieves the text “as is” from the corpus along with contextual elements found in the corpus:
+
+Domain, sub-domain
+Tags, categories, parent category, sub-categories
+Creation date (when document was created)
+Chunk, sub-chunk, document title
+Precise link to source
+Other corpus-dependent context elements
+Summary info
+Tags and categories may be pre-assigned to chunks post-crawling using home-made algorithm if absent in the corpus. The output is structured and displayed as 10 summary boxes called cards and selected out of possibly 50 or more, based on relevancy score. To get full info about a card, the user clicks on it. In the UI, the user can also specify category, sub-LLM, and other contextual elements.
+
+As an advanced user, you can leverage the Smart Engine to validate the retrieval process (data, tags, and other contextual elements), fine-tune intuitive parameters based on E-PMI metric (enhanced pointwise mutual information, a flexible alternative to cosine similarity), to adapt relevancy scores, stemming, and so on. Embeddings displayed as a clickable graph allows you to try suggested, related prompts relevant to your query, based on corpus content.
+
+2. Multimodal agents such as synthetic data
+
+In Figure 1, the featured agent is for tabular data synthetization. We developed NoGAN synthetic data generation to enrich xLLM. This component depends on the business use case, e.g. a bank wants to enhance the fraud models using xLLM in two stages:
+
+Create new variables (convert text intro ML features)
+Synthetic data: improve their current fraud model, generate new data for new markets with new patterns not found in the current (real) data, yet mimicking existing data.
+Other home-made agents part of xLLM:
+
+Predictive analytics on detected, retrieved and blended tables
+Unstructured text clustering
+Taxonomy creation or augmentation
+3. Response Generator offering user-customized contextual output 
+
+The user can choose prose for the response (like Perplexity.ai) as opposed to structured output (organized boxes or sections with bullet lists from Smart Engine). In this case, training is needed, but not using the whole Internet: typical LLMs have very large tokens lists covering big chunks of the English and others languages, most tokens irrelevant to business context.
+
+How is xLLM different from RAG
+The xLLM architecture is different from RAG. It shows structured output to the user (sections with bullet lists, or cards) that can be turned into continuous text if desired. The chat environment is replaced by selected cards displayed to the user, each with summary information, links and relevancy scores. With one click (the equivalent of a second prompt in standard systems), you get the detailed information attached to a card. Also, alternate clickable prompts are suggested based on corpus content and relevant to your initial queries. Top answers are cached. Of course, the user can still manually enter a new prompt, to obtain deeper results related to his previous prompt (if there are any). Or the user can decide not to link the new prompt to the previous one.
+
+A few key points:
+
+xLLM is designed to maximize accuracy, relevancy, exhaustivity, and to minimize prompt engineering and hallucinations.
+xLLM also displays related / alternate / suggested clickable pre-made prompts based on original prompt and what’s in the corpus, using keyword correlations (enhanced PMI, E-PMI) and variable-size embeddings based on E-PMI.
+Tokens are actually multi-tokens and are of two types: contextual if found in contextual elements attached to chunk, and standard if found in regular text. Chunking is hierarchical (2 levels) and chunks indexed via multi-index.
+The user can do exact or broad search, search by recency, enter negative keywords or put higher weight on first multi-token in the prompt; xLLM will look at all combinations of multi-tokens in the prompt (multi-tokens up to 5 words) for 10-word prompts and do so very efficiently with our own technology rather than vector DB. It also looks for synonyms and acronyms to increase exhaustivity. It also has a unique un-stemming algorithm.
+
+Real-time fine-tune: LoRA approach
+LoRA is used to adapt the style of the output but not the knowledge of the LLM. Fine-tune is used both to adapt response and change selection criteria, to optimize output distillation, stemming, E-PMI metric, relevancy scores, various thresholds, speed, and so on. Parameters most frequently favored by users lead to a default parameter set. This is the reinforcement learning part, leading to xLLM self-tuning.
+
+Important to mention:
+
+xLLM only shows what exists in the Enterprise Corpus
+Any response generated comes from xLLM Smart Engine
+Leveraging Explainable AI  
+The overall approach is to be an Open Box (the opposite of a Black Box) able to explain systematically from a prompt perspective everything that happens, as follows.
+
+A prompt generates a clickable graph with nodes. The nodes are based on E-PMI threshold and source. By clicking on a node, the user gets domain, sub-domain, tags, chunk or sub-chunk ID, relevancy score, and content: text, images, tables.
+
+Key Elements of XAI (explainable AI for xLLM):
+
+Transparency – Users can see how the model works internally in a graph view.
+Interpretability – Outputs and predictions can be understood in human terms exploratory in a graph view.
+Justification – The AI provides reasons or data points supporting its decision mapping the source, data, model score, and so on.
+Trustworthiness – Users trust xLLM more when they understand where results comes from.
+Compliance – xLLm meets legal, ethical, and regulatory requirements (GDPR, HIPAA) as our structure is sub-xLLM domain based (following mesh principals).
+Dealing with figures, numbers, dates
+Extracting tables, figures, or dates is the easy part. We have a proprietary algorithm to retrieve information (tables, bullet lists, components embedded into graphs) from PDFs. It perfroms the job more accurately than all the PDF processing libraries that we tested. To get the best of both worlds, we use efficient Python libraries combined with our algorithm and workarounds to avoid glitches coming from the libraries. Also, PDFs, like most other sources (web, database), are converted and blended to JSON-like format before being fed to the xLLM engine. This format is superior to the other formats tested. In particular, you can retrieve the relative size of a font, its face and color, and even the exact location (pixel coordinates) in the PDF. This in turn helps create contextual elements to add to the chunks.
+
+Another option is to convert PDF pages to images (very easy) and then use OCR, if the user wants to retrieve or leverage text or other information embedded in an image. This may be available in a future version.
+
+Addressing security issues 
+To ensure security, sensitive data our platform follows standards of Data Mesh principals (Domain-Centric & Security-Focused), our architecture enable to enhance companies’ internal security protocols and enhance to ensure full complaint.
+
+
+Figure 2: High-level architecture
+Each business domain becomes a sub-xLLM, ensuring security and isolation of departmental data while complying with any security and privacy rules. For example:
+
+Sales sub-LLM:
+
+Sub-xLLM: Sales
+Sensitive data (yes/no)
+Access management
+HR sub-LLM:
+
+Sub-xLLM: Sales
+Sensitive data (yes/no)
+Access management
+Our guiding principles:
+
+Access Control by Domain: Fine-grained access policies tailored to the domain’s data sensitivity.
+Data Encryption: Both in transit and at rest; required across all domain data products.
+Audit & Lineage: Transparent data movement and usage logs ensure compliance and traceability.
+Data Privacy by Design: PII detection, masking, and consent enforcement baked into domain pipelines.
+Zero Trust Model: Assume breach — verify every access request with strong authentication and authorization.
+
+
+In this article, I discuss LLM 1.0 (OpenAI, Perplexity, Gemini, Mistral, Claude, Llama, and the likes), the story behind LLM 2.0, why it is becoming the new standard architecture, and how it delivers better value at a much lower cost, especially for enterprise customers.
+
+1. A bit of history: LLM 1.0
+LLMs have their origins in tasks such as search, translation, auto-correct, next token prediction, keyword associations and suggestion, as well as guessing missing tokens or text auto-filling. Auto-cataloging, auto-tagging, auto-indexing, text structuring, text clustering, and taxonomy generation also have a long history but are not usually perceived as LLM technology, except indirectly as knowledge graphs and contextual windows.
+
+Image retrieval and processing, video and sound engineering are now part of the mix, leveraging metadata and computer vision, and referred to as multimodal. Solving tasks such as mathematical problems, filling in forms, or making predictions are being integrated via agents frequently relying on external API calls. For instance, you can call the Wolfram API for math: it has been around for over 20 years to automatically solve advanced problems with detailed step-by-step explanations.
+
+However, LLMs’ core engine is still transformers and deep neural networks, trained on predicting next tokens, a task barely related to what modern LLMs are used for these days. After years spent in increasing the size of these models, culminating with multi-trillion parameters, there is a realization that “smaller is better”. The trend is towards removing garbage via distillation, using smaller, specialized LLMs to deliver better results, as well as using better input sources.
+
+Numerous articles now discuss how the current technology is hitting a wall, with clients complaining about lack of ROI due to costly training, heavy use of GPU, security, interpretability (Blackbox systems), and hallucinations – a liability for enterprise customers. A key issue is charging clients based on token usage, favoring multi-billion token databases with atomic tokens over smaller token lists with long contextual multi-tokens, as the former commands more revenue for the vendors, at the expense of ROI and quality for the client.
+
+2. The LLM 2.0 revolution
+It has been brewing for a long time. Now it is becoming mainstream and replacing LLM 1.0, for its ability to deliver better ROI to enterprise customers, at a much lower cost. Much of the past resistance towards its adoption lied in one question: how can you possibly do better with no training, no GPU, and zero parameter?  It is as if everyone believed that multi-billion parameter models are mandatory, due to a long tradition.
+
+However, this machinery is used to train models on tasks irrelevant to the purpose, relying on self-reinforcing evaluation metrics that fail to capture desirable qualities such as depth, conciseness or exhaustivity. Not that standard LLMs are bad: I use OpenAI and Perplexity a lot for code generation, writing my investor deck, and even to answer advanced number theory questions. But their strength comes from all the sub-systems they rely upon, not from the central deep neural network.  Remove or simplify that part, then you get a product far easier to maintain and upgrade, costing far less in development, and if done right, delivering more accurate results without hallucination, without prompt engineering and without the need to double-check the answers: many times, OpenAI errors are quite subtle and can be overlooked.
+
+Good LLM 1.0 still saves a lot of time but requires significant vigilance. There is plenty of room for improvement, but more parameters and Blackbox DNNs have shown their limitations.
+
+I started to work on LLM 2.0 more than two years ago. It is described in detail in my recent articles:
+
+LLM 2.0, the New Generation of Large Language Models.
+LLM Deep Contextual Retrieval and Multi-Index Chunking: Nvidia PDFs Case Study.
+There is no such thing as a Trained LLM.
+New Generation of Large Language Models for Enterprise.
+10 Tips to Design Hallucination-Free RAG/LLM Systems.
+See also my two books on the topic:
+
+Building Disruptive AI & LLM Technology from Scratch.
+State of the Art in GenAI & LLMs — Creative Projects, with Solutions.
+It’s open source, with large Git repository here. See also a web API featuring the corpus of a Fortune 100 company where it was first tested, here. Note that the UI is far more than a prompt box, allowing you to fine-tune intuitive front-end parameters in real time.
+
+In the upcoming version (Nvidia), you will get a relevancy score attached to each entity in the results, to help you judge the quality of the answer. Embeddings will help you dig deeper by suggesting related prompts. It will also allow you to choose agents, sub-LLMs or top categories, negative keywords, return recent results only, and more.
+
+3. An interesting analogy
+Prior to LLMs, I worked for some time on tabular data synthetization, using GANs (generative adversarial networks). While GANs work well in computer vision problems, their performance is a hit-and-miss for synthesizing data. It requires considerable and complex fine-tuning depending on the real data, significant standardization, regularization, feature engineering, pre- and post-processing, and multiple transforms and inverse transforms to perform decently on any data set, especially those with multiple tables, time stamps, multi-dimensional categorical data, or small datasets. In the end, what made it work is not GAN, but all the workarounds built on top of it.
+
+GANs are unable to sample outside the observation range, a problem I solved in this article. The evaluation metrics used by vendors are poor, unable to capture high-dimensional patterns, generating false positives and false negatives, a problem I solved in this article. See also my Python library, here, and web API, here. In addition, vendors were producing non-replicable results: running GAN twice on the same training set produced different results. I actually fixed this, designing replicable GANs, and of course everything I developed outside GAN also led to replicability.
+
+In the end, I invented NoGAN, a technology that works much faster and much better than synthesizers that rely on deep neural networks. It is also discussed in my book published by Elsevier, available here. The story is identical to LLM 2.0, moving away from DNNs to a far more efficient architecture with no GPU, no parameter, no training, fast and easy to customize with explainable AI.
+
+Interestingly, the first version of NoGAN relied on hidden decision trees, a hybrid technique sharing similarities with XGBoost, and that I created for scoring unstructured text data as far back as 2008. It has its own patents and resulted in my first VC-funded startup, focused on click fraud detection and later on, for keyword monetization, based on the same nested hash database structure that I use today in LLM 2.0. The precursor to this is my work at Visa around 2002, to detect credit card fraud in real time.
+
+4. How LLM 2.0 came to life
+Besides the historical context discussed in section 3, LLM 2.0 (the xLLM system) really started about two years ago. It was motivated by my experience in analyzing billions of search queries to create a better taxonomy for digital catalogs while working at InfoSpace, my experience writing professional crawlers to parse millions of websites, and my inability to find the references I was looking for when writing research papers. Neither Google and Stack Exchange search boxes, nor GPT, were able to retrieve the documents I was looking for. I knew they were somewhere on Stack Exchange but could not find them anymore. The query that literally triggered my quest for better tools and jump-start LLM 2.0 was this: what is the variance of the range for Gaussian distributions? Posted here in November 2023, and here.
+
+Year 2023
+
+From there, I crawled the entire Wolfram corpus (15k webpages, 5000+ categories) and designed a tool that does much better than Google, specialized search tools, and GPT, to retrieve what I was looking for. All other tools were aimed mostly at the layman, returning useless material for professional researchers like me. I compare the first version of xLLM with OpenAI, here. The code is on GitHub, here.
+
+Year 2024
+
+I developed different versions of xLLM: for clustering and predictive analytics (here), for taxonomy generation (here), DNA sequence synthetization (here) which is the only version where token prediction matters, and finally the first version of Enterprise xLLM for a Fortune 100 company.
+
+It became clear over time that all professional corpuses are well structured, and that exploiting the structure recovered during the crawl would be a tremendous advantage to design a better architecture. Along the way, I continued to improve models based on deep neural networks, for instance with an adaptive loss function converging to the evaluation metric (here).
+
+Year 2025
+
+Everyone talks about small LLMs as the new panacea. It does not need to be small but instead, broken down into specialized sub-LLMs governed by an LLM router, for increased performance. At this moment, I am working on multi-index, deep contextual and hierarchical chunking, using Nvidia financial reports (PDFs) as a case study, with PDF retrieval capabilities not found anywhere else, agents assigned post-crawling, multimodal, and a unique scoring engine that I call the new “PageRank” for LLMs. See section 2 in this article for details. The most recent documentation is posted here.
+
+I also manage the largest deep tech LLM/GenAI network on LinkedIn, with 190k followers and 200k subscribers to my newsletter, attracting advertising clients such as Nvidia and SingleStore.
+
+
+
+LLM 2.0 refers to a new generation of large language models that mark a significant departure from the traditional deep neural network (DNN)-based architectures, such as those used in GPT, Llama, Claude, and similar models. The concept is primarily driven by the need for more efficient, accurate, and explainable AI systems, especially for enterprise and professional use cases.
+
+The technology was pioneered by Bonding AI under the brand name xLLM. Details are posted here.
+
+
+Key Innovations and Features
+1. Architectural Shift
+
+LLM 2.0 moves away from the heavy reliance on deep neural networks and GPU-intensive training. Instead, it leverages knowledge graphs (KG), advanced indexing, and contextual retrieval, resulting in a “zero-parameter” or “zero-weight” system in some implementations.
+This approach enables the model to be hallucination-free and eliminates the need for prompt engineering, making it easier to use and more reliable for critical tasks.
+2. Knowledge Graph Integration
+
+LLM 2.0 natively integrates knowledge graphs into its backend, allowing for contextual chunking, variable-length embeddings, and more accurate keyword associations using metrics like pointwise mutual information (PMI).
+This results in better handling of complex queries and retrieval of relevant information, even with few tokens.
+3. Enhanced Relevancy and Exhaustivity
+
+The model provides normalized relevancy scores for each answer, alerting users when the underlying corpus may have gaps. This transparency improves trust and usability for professional users1.
+It also augments queries with synonyms and related terms to maximize exhaustivity and minimize information gaps.
+4. Specialized Sub-LLMs and Real-Time Customization
+
+LLM 2.0 supports specialized sub-models (sub-LLMs) that can be routed based on category, recency, or user-defined parameters. Users can fine-tune these parameters in real-time, even in bulk, without retraining the entire model.
+This modularity allows for highly customizable and efficient workflows, especially in enterprise settings.
+5. Deep Retrieval and Multi-Index Chunking
+
+Advanced retrieval techniques like multi-indexing and deep contextual chunking are used, enabling secure, granular, and comprehensive access to structured and unstructured data (e.g., PDFs, databases).
+The system can also connect to other LLMs or custom applications for tasks like clustering, cataloging, or predictions.
+6. Agentic and Multimodal Capabilities
+
+LLM 2.0 is designed to be agentic (capable of automating tasks) and multimodal, handling not only text but also images, video, and audio, and integrating with external APIs for specialized tasks (e.g., mathematical problem solving).
+Comparison: LLM 2.0 vs. LLM 1.0
+Feature	LLM 1.0 (Traditional)	LLM 2.0 (Next Gen)
+Core Architecture	Deep neural networks, transformers	Knowledge graph, contextual retrieval
+Training Requirements	Billions of parameters, GPU-intensive	Zero-parameter, no GPU needed
+Hallucination Risk	Present, often requires double-checking	Hallucination-free by design
+Prompt Engineering	Often necessary	Not required
+Customization	Limited, developer-centric	Real-time, user-friendly, bulk options
+Relevancy/Exhaustivity	No user-facing scores, verbose output	Normalized relevancy scores, concise
+Security/Data Leakage	Risk of data leakage	Highly secure, local processing possible
+Multimodal/Agentic	Limited, mostly text	Native multimodal, agentic automation
+Enterprise and Professional Impact
+LLM 2.0 is particularly suited for enterprise environments due to:
+
+Lower operational costs (no GPU, no retraining)
+Higher accuracy and transparency
+Better integration with business workflows (fine-tuning, automation)
+Stronger security and explainability.
+Summary
+LLM 2.0 represents a paradigm shift in large language model design, focusing on efficiency, explainability, and enterprise-readiness by leveraging knowledge graphs, advanced retrieval, and modular architectures. It aims to overcome the limitations of traditional DNN-based LLMs, offering better ROI, security, and reliability for professional users.
+
+
+The following glossary features the main concepts attached to LLM 2.0, with examples, rules of thumb, caveats, best practices, contrasted against standard LLMs. For instance, OpenAI has billions of parameters while xLLM, our proprietary LLM 2.0 system has none. This is true if we consider a parameter as a weight connecting neurons in a deep neural network: after all, the xLLM architecture does not rely on neural networks for the most part. Yet, xLLMs has a few dozen intuitive parameters easy to fine-tune, if the word “parameter” is to be interpreted in its native form.
+
+
+xLLM: extract from the Python code
+Agents — Action agents are home-made apps to perform tasks on retrieved data: tabular data synthetization, auto-tagging, auto-indexing, taxonomy creation or augmentation, text clustering for instance for fraud detection, enhanced visualization including data videos, or cloud regression for predictive analytics (whether the data comes from PDFs, Web, databases or data lakes). Tasks not included in this list (code generation, solving math problems) are performed using external agents.
+
+Agents — Search agents detect user intent in the prompt (“how to”, “what is”, “show examples” and so on) to retrieve chunks pre-tagged accordingly. Alternatively, they can be made available from the UI, via an agent selection box.
+
+Backend — Parameter, tables, and components linked to corpus processing. See also frontend.
+
+Card — A clickable summary box in the response featuring one element of the response, corresponding to a chunk and featuring its relevancy score, index, and contextual elements. When you click on it, you get the detailed text, and tables or images if there are any.
+
+Chunking — We use hierarchical chunking with two levels. A backend table maps the list of daughter chunks attached to a parent chunk (the key is a parent chunk); xLLM also builds the inverse table where the key is a daughter chunk, and the value is the parent.
+
+Contextual elements — Categories, chunk titles, tags, time stamps, document titles in PDF repository, and so on, added to chunks. Their name and content come from the corpus or created post-crawling. Chunks have a variable number of contextual elements. In poorly structured corpuses, chunk titles may be generated based on relative font size or retrieved from a table of content. Since these elements are linked to the entire knowledge graph, xLLM uses an infinite context window.
+
+Context window — To compute multi-token correlations or generate c-tokens (multi-tokens with words not glued together but separated by other words) we look at words relatively close to each other within a chunk. This is the finite context window. Its length can be fine-tuned. An efficient algorithm performs this task linearly rather than quadratically depending on the size of the chunk (no inner loops).
+
+Crawling — Generic word that means intelligently extracting text and other elements from the corpus to create the xLLM file. If the corpus is a repository of PDF documents, crawling should be interpreted as parsing. If the input data comes from a database, crawling means DB querying, extraction and parsing. Some corpuses have a mix of public and private Web, DB, file repositories (PDFs) and so on. In this case, crawling means intelligently extracting and combining all the information from the various sources, broken down into chunks. See also smart crawling and xLLM file.
+
+Distillation — Not to be confused with deep neural network distillation (removing useless weights). Here backend distillation is used to remove duplicate entries in the corpus. Frontend distillation removes duplicates or redundant elements in the response, acting as a response cleaning agent. It can be turned off or customized via frontend parameters.
+
+Embeddings — Unlike standard LLMs, embeddings are not needed to build the response. Instead, they are used to suggest multi-tokens related to the prompt, allowing the user to try a different prompt with just one click. We use variable length embeddings and a combination of PMI or E-PMI to measure similarities, rather than cosine similarity. We do not use vector databases or vector search. Instead, we use very fast hash lookups.
+
+Fine-tuning — Frontend fine-tuning is offered to power users in real-time with no latency. To the contrary, backend fine-tuning re-creates all the backend tables. Fine-tuning can be global (for all sub-LLMs at once), local (one sub-LLM at a time) or hybrid (with both local and global parameters). Parameters are intuitive: you can predict the impact of increasing or decreasing values or tuning them on or off. The system is based on explainable AI. Fine-tuning allows the response to be customized to the user. See also parameters and self-tuning.
+
+Frontend — Parameter, tables, and components linked to prompt processing. Local extracts of the backend tables are used in the frontend to process the prompt efficiently, for instance q_dictionary and q_embeddings. The prefix “q_” indicates that this is a local table containing all that is needed from the backend, to process the prompt (also called “query”). See also backend.
+
+Indexing — Mechanism to reference the exact location in the corpus corresponding to a response element or chunk in the xLLM data. We use a multi-index with entries sequentially generated to allow for corpus browsing; the multi-index contains references to the parent chunk and other elements such as font size.
+
+Knowledge graph — A set of contextual elements organized as a graph, retrieved from the corpus via smart crawling, such as the taxonomy, breadcrumbs, related items, tags, links, tables, and so on. If the internal knowledge graph is poor, it can be enhanced by adding tags or categories via a labeling algorithm (or clustering), post-crawling. Typically, xLLM does not build a knowledge graph; instead, it uses the one found in the corpus. In some cases, it is augmented or blended with external knowledge graphs.
+
+Multimodal — Tables and images are detected at the chunk level and stored separately. They are accessible from cards in the response, along with the other contextual elements (categories, tags, titles). Also, there are special tags pre-assigned to chunks post-crawling, to indicate the presence of tables or images for chunks that contain some. This applies to PDFs, but data coming from the Web is processed in the same way, as both are converted to JSON prior to be fed to the xLLM engine.
+
+N-grams — We use sorted N-grams to match each multi-token combination detected in a sorted prompt, with multi-tokens found in the corpus, in order to retrieve the correct word ordering. Example: “data science book” in a prompt is turned to book~data~science. In the sorted N-gram table, the row corresponding to book~data~science (if it exists) lists all the variations found in the corpus, say data~science~book and science~book~data, with number of occurrences. It eliminates the combinatorial explosion generated by multi-tokens consisting of many words.
+
+Nested hashes — The base xLLM architecture stores databases as nested hashes for fast and real-time execution. Also called in-memory LLM. In a nested hash, a parent key can be a vector such as pair of multi-tokens, and the value can be a hash table. This structure is very efficient to deal with sparsity: a keyword pair {A, B} is stored only in the rare instances when A and B are correlated. The code includes functions to update, delete, add or retrieve entries in a nested hash, and to compute the inverse or transposed hash. The latter is the equivalent of transposing a matrix or tuning a row into a column database. A nested hash entry is similar to a JSON element.
+
+Parameters — Not to be confused with standard LLM parameters which are deep neural network weights. Backend parameters are used to build the backend tables linked to corpus processing; frontend parameters are linked to prompt processing and can be fine-tuned in real time, for instance to optimize the relevancy scores, frontend distillation, E-PMI (if offered as customizable front-end component), and frontend stemming.
+
+PMI — We use generalized pointwise mutual information (PMI) to measure the correlation between two multi-tokens A and B in the corpus. PMI takes into account word counts for A and B in the corpus, as well as occurrences of A, B found jointly in a same text element or chunk. Enhanced PMI (E-PMI) takes into account additional factors such as the number of words in a multi-token, or word intersection between multi-tokens A and B. The E-PMI metric has parameters that can be fine-tuned. Finally, it is standardized to take a value between 0 (no association) and 1 (strong association).
+
+Preprocessing — Consists of turning the original corpus (Web pages, PDFs, databases or a mix of all) into xLLM format. It also involves building a stopwords list, stemming optimization, pre-tagging (assigning search agents, categories, titles and tags to chunks), setting backend parameters, and building synonyms/acronyms dictionary as needed.
+
+Relevancy scores — Different scores are computed for each candidate card in the response, based on the multi-tokens attached to it and the relevancy to the prompt. Typically, with one score for each token type. Scores are normalized to stay within a range: 0 for worst match, to 10 for best match. The cards in the response are then ranked by score, for each score. For each card, a global rank is computed as a weighted sum of the individual ranks attached to the card in question. The top 10 cards (by global rank) are shown in the response. Several parameters can be fine-tuned to modify the scores and the ranking system.
+
+Response — Results to the user prompt. Consists of concise information organized as structured output (such as cards or sections with bullet lists, including relevancy scores and precise link to source) or long text typical of Perplexity. For long text generation, use specialized models and train from scratch using the minimum training set needed. If using pre-trained models, deep neural network distillation is needed. In the response, the user can choose to have hist next prompt linked to the previous prompts, or not. Responses to most popular prompts are cached.
+
+Search options — In the UI, the prompt box allows you to do exact or broad search, enter negative keywords, put a higher weight on the first multi-token in the prompt, search by recency, or specify agents, tags, and sub-LLMs. A debugging mode is available, offering a catch-all parameter set, useful to developers.
+
+Self-tuning — Power users can fine-tune parameters in real time. Favorite parameters chosen by power user are combined to create sets of default parameters, regularly updated. This reinforcement learning technique is known a self-tuning.
+
+Smart crawling — During crawling or when parsing PDF documents, we retrieve the contextual elements embedded in the corpus, such as taxonomy or words in large font, to add context (categories, tags and so on) to the chunks. While the structure is similar across different corpus types (database, Web and so on) there is no Python library that does the job without missing important elements. Our proprietary technique does the job but requires some minimum customization for each corpus. The task is facilitated by converting the corpus to JSON. Even bullet lists and relative font sizes can be correctly identified in PDFs. This works whether the corpus document uses elements labeled as headers, or not.
+
+Stemming — Can be turned off. Backend and frontend stemming may or may not use the same stem table. See also un-stemming and synonyms. Backend stemming should be turned on for frontend stemming to be effective.
+
+Stopwords — List of words to ignore from corpus when crawling to generate the xLLM file. Specific to corpus and even to sub-LLM. There is also a frontend list of stopwords to ignore in the prompt. Both lists may or may not be the same. Keywords such as “how” and “what” may be in the prompt stopwords list (ignored for retrieval in chunks) yet treated separately as they relate to specific search agents and indicate user intent.
+
+Sub-LLM — Corporate corpuses can be broken down into sub-corpuses, each with its own sub-LLM. Access to specific sub-LLMs, and even to specific chunks within a sub-LLM, is granted to authorized users only. Thanks to using an LLM router, results can be extracted from multiple sub-LLMs as needed, to answer a prompt. When building sub-LLMs, we work with stakeholders and IT to make sure that we do not miss any source due to siloed information. This process also involves sound quality assurance to make sure that all the important data sources are integrated into xLLM, to no miss important information in the response.
+
+Synonyms — Multi-tokens found in the prompt are matched against a synonym and acronyms dictionary to increase exhaustivity in search results. Example: say “games” is found in the prompt but not in the corpus. First, “games” is stemmed to “game”. Then “game” is un-stemmed to identify related words: “games”, “gaming”, “gamers” and so on. If “gaming” is in the corpus, it will be retrieved despite not being in the prompt. Other examples are more complex, for instance matching multi-token “analysis~variance” to “anova”. The words retrieved via un-stemming, if found in the corpus, are called s-tokens. They may get a lower weight than standard multi-tokens as they are not a perfect match.
+
+Tags — Tags may come directly from the corpus and are integrated into chunks as contextual elements. We also generate tags that we assign to chunks post-crawling, to establish a link to specific agents, indicate the presence of tables or images, or mark the chunk as sensitive with access limited to authorized users only.
+
+Token — In xLLM, tokens consist of one word (single tokens) or multiple words (multi-tokens). A word such as “real estate” is both a single token (real_estate), a multi-token (real~estate) and two single tokens (real, estate). They are referred to as multi-tokens in all cases. In addition, c-tokens consists of words found close to each other in a chunk but not glued together (separated by other words). Example: data^books is a c-token extracted from “data science books”.
+
+Token type — Besides regular multi-tokens found in standard text in the corpus, xLLM uses knowledge graph multi-tokens referred to as g-tokens. They are found in the contextual elements attached to a chunk: category, sub-categories, title, tags, and so on. They get a higher weight in the relevancy scores. See also c-tokens in the “token” entry, and s-token in the “synonyms” entry.
+
+Un-stemming — See synonyms. We use a proprietary algorithm to un-stem. When using public stemmers or lemmatizers, we need to breakdown some entries: “racing” and “race” cannot have the same stem. Look at top 50 multi-tokens with highest frequency in the corpus to fix the most problematic ones.
+
+Weights — A positive value to boost or reduce the influence of certain multi-tokens in search results, such as c-tokens, s-tokens, g-tokens, or single-word tokens, compared to regular multi-tokens assigned a weight of 1. Not to be confused with weights in deep neural networks. Our weights can be fine-tuned on the frontend in real time.
+
+xLLM file — Raw input from corpus, cleaned then converted to JSON-like text file regardless of origin (Web, PDF repository, DB). Each row corresponds to a chunk and includes the contextual elements and index ID within a single JSON entity. Images and tables are stored separately with an index referencing to the parent chunk they belong to. Chunks have indexes pointing to the images and tables that they contain.
+
+
+This article features an application of xLLM to extract information from a corporate corpus, using prompts referred to as “queries”. The goal is to serve the business user — typically an employee of the company or someone allowed access — with condensed, relevant pieces of information including links, examples, PDFs, tables, charts, definitions and so on, to professional queries. The original xLLM technology is described in this presentation. More details are available in my new book (June 2024), available here.
+
+
+Front-end diagram (zoom in for higher resolution)
+
+Back-end diagram (zoom in for higher resolution)
+The main differences with standard LLMs are:
+
+No training, no neural network involved. Thus, very fast and easy to fine-tune with explainable parameters, and much fewer tokens. Yet, most tokens consist of multiple terms and are called multitokens. Also, I use variable-length embeddings. Cosine similarity and dot products are replaced by customized pmi (pointwise mutual information).
+Parameters have a different meaning in my context. In standard architectures, they represent the weights connecting neurons. You have billions or even trillions of them. But there is no neural network involved here: instead, I use parametric weights governed by a few top-level parameters. The weights — explicitly specified rather than iteratively computed — are not the parameters. My architecture uses two parameter sets: frontend and backend. The former are for scoring and relevancy; they are fine-tuned in real time with no latency, by the user or with some algorithm. A relevancy score is shown to the user, for each retrieved item.
+I don’t use vector or graph databases. Tables are stored as nested hashes, and fit in memory (no GPU needed). By nested hashes, I mean key-value tables, where the value may also be a key-value table. The format is similar to JSON objects. In standard architectures, the central table stores the embeddings. Here, embeddings are one of many backend tables. In addition, there are many contextual tables (taxonomy, knowledge graph, URLs) built during the crawling. This is possible because input sources are well structured, and elements of structure are recovered thanks to smart crawling.
+The Python code does not use any library, nor any API call. Not even Pandas, Numpy, or NLTK. So you can run it in any environment without concern for library versioning. Yet it has fewer than 600 lines of code, including the fine-tuning part in real time. I plan to leverage some library functions in the future such as auto-correct, singularize, stem, stopwords and so on. However, home-made solutions offer more customization, such as ad-hoc stopwords lists specific to each sub-LLM, for increased performance. For instance, the one-letter word ‘p’ cannot be eliminated if the sub-LLM deals with statistical concepts. The only exception to the “no library” rule is the Requests library, if you choose to download the test enterprise corpus from its GitHub location.
+This article focuses only on one part of an enterprise corpus: the internal documentation about how to implement or integrate AI and machine learning solutions. Other parts include marketing, IT, product, sales, legal and HR. A specific sub-LLM is built for each part, using the same architecture. The full LLM consists of these sub-LLMs, glued together with an LLM router to redirect user prompts to the specific parts, possibly spanning across multiple sub-LLMs. For instance, “security” is found in multiple sub-LLMs.
+Conclusions
+My custom sub-LLM designed from scratch does not rely on any Python library or API, and performs better than search tools available on the market, in terms of speed and results relevancy. It offers the user the ability to fine-tune parameters in real time, and can detect user intent to deliver appropriate output. The good performance comes from the quality of the well-structured input sources, combined with smart crawling to retrieve the embedded knowledge graph and integrate it into the backend tables. Traditional tools rely mostly on tokens, embeddings, billions of parameters and frontend tricks such as prompt engineering to fix backend issues.
+
+To the contrary, my approach focuses on building a solid backend foundational architecture from the ground up. Tokens and embeddings are not the most important components, by a long shot. Cosine similarity and dot products are replaced by pointwise mutual information. There is no neural network, no training, and a small number of explainable parameters, easy to fine-tune.
+
+When you think about it, the average human being has a vocabulary of 30,000 words. Even if you added variations and other pieces of information (typos, plural, grammatical tenses, product IDs, street names, and so on), you end up with a few millions at most, not trillions. Indeed, in expensive multi-billion systems, most tokens and weights are just noise: most are rarely fetched to serve an answer. This noise is a source of hallucinations.
+
+
+Top multitokens in corpus, sorted by importance
+Finally, gather a large number of user queries even before your start designing your architecture, and add prompt elements into your backend tables, as a source of data augmentation. It contributes to enhancing the quality of your system.
+
+View article, get the code and data
+The technical document is available on GitHub, here. It features detailed documentation with illustrations (5 pages) and the code (10 pages), with links to data sources, backend tables, as well as the code on GitHub. To get the clickable links to work, download the document and view it in any browser or PDF viewer, instead of directly on GitHub.
+
+
+One obvious way to dramatically improve the quality of LLM and RAG systems is to use high-quality input sources, as opposed to just raw text from the crawled or parsed content. Combine it with specialization: one LLM per top domain, allowing the user to customize parameters and specify the domain in addition to standard concise prompts. Then you end up with very fast, lightweight, self-tuned, hallucination-free implementations, suitable for enterprise needs and inexpensive (much fewer tokens, no GPU, no neural networks, no training). Also, you can deploy these multi-LLMs locally even on a modest laptop, boosting security.
+
+That was the goal when I developed the xLLM architecture. Even though it creates its own embeddings, even x-embeddings with tokens replaced by multi-token words (see here), the strength comes from highly structured information detected in the corpus or brought in externally. This extra information leads to several backend tables in addition to x-embeddings; these tables are responsible for the quality of the output, more so than the embeddings.
+
+What’s more, when designing xLLM, earlier tests showed that systems with billions of tokens are extremely sparse. Most of the tokens are noise. These useless tokens rarely get activated or fetched when producing an answer to a prompt, and if they do, it may result in hallucinations or poor quality. But customers pay by the token, so there is little incentive to clean this mess. The problem is compounded by the Blackbox / neural network architecture of standard LLMs. It makes testing and implementing changes slow and expensive, an art more than a science, in sharp contrast to xLLM.
+
+Integrating taxonomies into LLMs
+Besides taxonomies, integrating indexes, titles and subtitles, glossaries, synonyms dictionaries and other structured data, further contributes to the quality. Whether gathered on the corpus or coming externally as augmented data. However, here I focus on taxonomies only.
+
+The first version of xLLM heavily relied on a high-quality taxonomy found in the crawled data (Wolfram in this case) and other structures such as a graph of related concepts. All this was very easy to detect and retrieve from the website, thanks to smart crawling. But what if this type of structure is missing in your corpus? For instance, Wikipedia also has a decent structure, very similar to Wolfram, and easy to detect. But it is a hit and miss. Some topics such as “machine learning” are well organized. For “statistical science”, the quality of the embedded structure is low. The goal of this article is to discuss options when facing this situation.
+
+
+Fig. 1: Wolfram top categories for “Stats & Proba” (left) vs home-made LLM (right)
+The two main options are:
+
+Create a taxonomy from scratch based on the crawled corpus, in a semi-automated way. See Figure 1 for illustration.
+Use an external taxonomy that covers your specific domain: one for each specialized sub-LLM. This process is fully automated.
+These two options are discussed in the technical document accompanying this article, with open-source code. More about xLLM can be found here, especially articles 36-38 listed there.
+
+Evaluating LLMs
+Evaluation is a tricky problem, as two users – a layman versus a professional expert – are bound to have opposite ratings. In the context of xLLM, two users with the same prompt may get different answers if they choose different sets of hyperparameters.
+
+That said, I came up with an evaluation method specific to xLLM. The Wolfram xLLM is based on the Wolfram taxonomy. However, you can use that taxonomy as if it was external, that is, not part of the crawled data. You then categorize all the crawled webpages using the Wolfram taxonomy as augmented data. Then you compare the results with the native categories assigned by Wolfram. The amount of mismatch between both, across all webpages, is an indicator of quality.
+
+But the problem is more complicated than that. First, my algorithm assigns multiple categories to each webpage, each with its relevancy score. Wolfram assigns only one category per page, though there are other structure elements achieving the same goal.
+
+
+Fig. 2: Wolfram categories assigned to URLs, vs. reconstructed categories
+What it means is that “exact match” is not a good metric. Out of 600 pages and 600 categories, I get between 100 and 150 categorized exactly as Wolfram, depending on the parameters used to produce my relevancy scores. This sounds very bad, but most of the mismatches are actually pretty good. Just not 100% identical as you can see in Figure 2. This is due to the very high granularity of the Wolfram taxonomy.
+
+

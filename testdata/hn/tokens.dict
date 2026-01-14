@@ -1,0 +1,148 @@
+# Hacker News Multi-Token Dictionary
+# Format: canonical|category
+# Tech/startup domain phrases
+
+# AI/ML terms
+machine learning|ai
+artificial intelligence|ai
+deep learning|ai
+neural network|ai
+large language model|ai
+natural language processing|ai
+computer vision|ai
+reinforcement learning|ai
+supervised learning|ai
+unsupervised learning|ai
+transfer learning|ai
+language model|ai
+transformer architecture|ai
+attention mechanism|ai
+gradient descent|ai
+
+# Programming/Dev
+open source|programming
+software engineering|programming
+version control|programming
+continuous integration|devops
+continuous deployment|devops
+code review|programming
+unit test|programming
+integration test|programming
+test driven|programming
+pull request|programming
+merge request|programming
+git flow|programming
+agile development|programming
+software architecture|programming
+design pattern|programming
+object oriented|programming
+functional programming|programming
+web framework|web
+rest api|web
+graphql api|web
+microservice architecture|programming
+cloud native|devops
+
+# Web/Frontend
+web development|web
+frontend framework|web
+backend framework|web
+full stack|web
+single page|web
+progressive web app|web
+user interface|web
+user experience|web
+responsive design|web
+web component|web
+server side|web
+client side|web
+static site|web
+content management|web
+search engine|web
+browser extension|web
+
+# Startup/Business
+venture capital|startup
+series a|startup
+series b|startup
+initial public offering|startup
+product market fit|startup
+minimum viable product|startup
+growth hacking|startup
+burn rate|startup
+go to market|startup
+business model|startup
+revenue stream|startup
+customer acquisition|startup
+market share|startup
+competitive advantage|startup
+value proposition|startup
+term sheet|startup
+cap table|startup
+stock option|startup
+equity stake|startup
+
+# Security
+security vulnerability|security
+zero day|security
+cross site scripting|security
+sql injection|security
+buffer overflow|security
+denial of service|security
+man in the middle|security
+certificate authority|security
+public key|security
+private key|security
+encryption algorithm|security
+access control|security
+authentication token|security
+two factor|security
+multi factor|security
+
+# Infrastructure/DevOps
+cloud computing|devops
+distributed system|devops
+load balancer|devops
+horizontal scaling|devops
+vertical scaling|devops
+database migration|database
+data warehouse|database
+message queue|devops
+event driven|devops
+service mesh|devops
+container orchestration|devops
+infrastructure as code|devops
+serverless architecture|devops
+edge computing|devops
+content delivery|web
+
+# Data/Analytics
+data science|ai
+data mining|ai
+predictive analytics|ai
+time series|ai
+data visualization|ai
+data pipeline|devops
+big data|ai
+real time|programming
+streaming data|devops
+batch processing|devops
+
+# Other tech
+operating system|programming
+file system|programming
+command line|programming
+terminal emulator|programming
+text editor|programming
+integrated development environment|programming
+package manager|programming
+dependency management|programming
+build system|programming
+compiler optimization|programming
+garbage collection|programming
+memory management|programming
+thread pool|programming
+connection pool|programming
+cache invalidation|programming
+race condition|programming
+deadlock detection|programming

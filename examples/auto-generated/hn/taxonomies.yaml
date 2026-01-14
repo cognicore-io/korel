@@ -1,0 +1,124 @@
+# Korel Taxonomy - Hacker News / Tech Domain
+
+sectors:
+  ai:
+    - ai
+    - llm
+    - gpt
+    - chatgpt
+    - machine-learning
+    - deep-learning
+    - neural-network
+    - transformer
+  programming:
+    - programming
+    - code
+    - developer
+    - software
+    - framework
+    - library
+    - api
+    - debugging
+  web:
+    - web
+    - browser
+    - chrome
+    - firefox
+    - html
+    - css
+    - javascript
+    - frontend
+    - backend
+  security:
+    - security
+    - vulnerability
+    - breach
+    - hack
+    - encryption
+    - cryptography
+    - authentication
+  database:
+    - database
+    - sql
+    - postgresql
+    - mysql
+    - mongodb
+    - nosql
+  startup:
+    - startup
+    - founder
+    - entrepreneur
+    - bootstrapping
+  devops:
+    - devops
+    - kubernetes
+    - docker
+    - deployment
+    - ci-cd
+
+events:
+  funding:
+    - funding
+    - series-a
+    - series-b
+    - venture-capital
+    - vc
+    - investment
+    - acquisition
+    - ipo
+  release:
+    - released
+    - launched
+    - version
+    - announcement
+    - open-source
+  incident:
+    - outage
+    - downtime
+    - breach
+    - vulnerability
+    - bug
+  career:
+    - hiring
+    - job
+    - remote
+    - salary
+    - interview
+
+regions:
+  us:
+    - us
+    - usa
+    - silicon-valley
+    - san-francisco
+    - seattle
+  eu:
+    - europe
+    - eu
+    - berlin
+    - london
+  asia:
+    - china
+    - japan
+    - singapore
+    - india
+
+entities:
+  companies:
+    OPENAI:
+      - openai
+      - open-ai
+    GOOGLE:
+      - google
+      - alphabet
+    META:
+      - meta
+      - facebook
+    MICROSOFT:
+      - microsoft
+      - ms
+    APPLE:
+      - apple
+    AMAZON:
+      - amazon
+      - aws

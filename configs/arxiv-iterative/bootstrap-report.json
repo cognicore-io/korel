@@ -1,0 +1,477 @@
+{
+  "generated_at": "2025-11-11T06:13:32.60925+01:00",
+  "total_docs": 500,
+  "iterations": [
+    {
+      "iteration": 1,
+      "stopwords_added": 0,
+      "new_stopwords": null,
+      "total_stopwords": 125
+    }
+  ],
+  "stopwords": [
+    "a",
+    "about",
+    "above",
+    "after",
+    "again",
+    "against",
+    "all",
+    "am",
+    "an",
+    "and",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "been",
+    "before",
+    "being",
+    "below",
+    "between",
+    "both",
+    "but",
+    "by",
+    "can",
+    "did",
+    "do",
+    "does",
+    "doing",
+    "down",
+    "during",
+    "each",
+    "few",
+    "for",
+    "from",
+    "further",
+    "had",
+    "has",
+    "have",
+    "having",
+    "he",
+    "her",
+    "here",
+    "hers",
+    "herself",
+    "him",
+    "himself",
+    "his",
+    "how",
+    "i",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "itself",
+    "just",
+    "me",
+    "more",
+    "most",
+    "my",
+    "myself",
+    "no",
+    "nor",
+    "not",
+    "now",
+    "of",
+    "off",
+    "on",
+    "once",
+    "only",
+    "or",
+    "other",
+    "our",
+    "ours",
+    "ourselves",
+    "out",
+    "over",
+    "own",
+    "re",
+    "same",
+    "she",
+    "should",
+    "so",
+    "some",
+    "such",
+    "than",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "themselves",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "to",
+    "too",
+    "under",
+    "until",
+    "up",
+    "very",
+    "was",
+    "we",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "who",
+    "whom",
+    "why",
+    "will",
+    "with",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves"
+  ],
+  "pairs": [
+    {
+      "A": "large",
+      "B": "language",
+      "PMI": 1.172176030243937,
+      "BigramFreq": 81,
+      "Support": 77,
+      "PhraseScore": 94.9462584497589
+    },
+    {
+      "A": "neural",
+      "B": "networks",
+      "PMI": 1.3428092491801518,
+      "BigramFreq": 68,
+      "Support": 53,
+      "PhraseScore": 91.31102894425032
+    },
+    {
+      "A": "time",
+      "B": "series",
+      "PMI": 1.6835458845878224,
+      "BigramFreq": 54,
+      "Support": 20,
+      "PhraseScore": 90.91147776774241
+    },
+    {
+      "A": "machine",
+      "B": "learning",
+      "PMI": 0.5868283007503696,
+      "BigramFreq": 98,
+      "Support": 67,
+      "PhraseScore": 57.50917347353622
+    },
+    {
+      "A": "et",
+      "B": "al",
+      "PMI": 3.7297014486341915,
+      "BigramFreq": 15,
+      "Support": 10,
+      "PhraseScore": 55.945521729512876
+    },
+    {
+      "A": "reinforcement",
+      "B": "learning",
+      "PMI": 0.657780036722654,
+      "BigramFreq": 84,
+      "Support": 52,
+      "PhraseScore": 55.253523084702934
+    },
+    {
+      "A": "neural",
+      "B": "network",
+      "PMI": 1.2740115186831846,
+      "BigramFreq": 36,
+      "Support": 40,
+      "PhraseScore": 45.86441467259465
+    },
+    {
+      "A": "artificial",
+      "B": "intelligence",
+      "PMI": 3.0937126819141945,
+      "BigramFreq": 12,
+      "Support": 11,
+      "PhraseScore": 37.12455218297033
+    },
+    {
+      "A": "wide",
+      "B": "range",
+      "PMI": 2.5620962884791303,
+      "BigramFreq": 14,
+      "Support": 13,
+      "PhraseScore": 35.86934803870783
+    },
+    {
+      "A": "extensive",
+      "B": "experiments",
+      "PMI": 1.0982998374860644,
+      "BigramFreq": 30,
+      "Support": 31,
+      "PhraseScore": 32.948995124581934
+    },
+    {
+      "A": "code",
+      "B": "available",
+      "PMI": 1.8119621765455742,
+      "BigramFreq": 17,
+      "Support": 29,
+      "PhraseScore": 30.80335700127476
+    },
+    {
+      "A": "gradient",
+      "B": "descent",
+      "PMI": 2.551046452292545,
+      "BigramFreq": 12,
+      "Support": 10,
+      "PhraseScore": 30.61255742751054
+    },
+    {
+      "A": "recent",
+      "B": "advances",
+      "PMI": 1.6440293572037195,
+      "BigramFreq": 17,
+      "Support": 19,
+      "PhraseScore": 27.948499072463232
+    },
+    {
+      "A": "publicly",
+      "B": "available",
+      "PMI": 2.094945728215801,
+      "BigramFreq": 12,
+      "Support": 12,
+      "PhraseScore": 25.13934873858961
+    },
+    {
+      "A": "graph",
+      "B": "neural",
+      "PMI": 1.0269562997616746,
+      "BigramFreq": 24,
+      "Support": 20,
+      "PhraseScore": 24.64695119428019
+    },
+    {
+      "A": "latent",
+      "B": "space",
+      "PMI": 1.4177850282112614,
+      "BigramFreq": 16,
+      "Support": 15,
+      "PhraseScore": 22.684560451380182
+    },
+    {
+      "A": "series",
+      "B": "forecasting",
+      "PMI": 2.228477120840324,
+      "BigramFreq": 10,
+      "Support": 12,
+      "PhraseScore": 22.28477120840324
+    }
+  ],
+  "high_df_tokens": [
+    {
+      "token": "models",
+      "df_percent": 55.60000000000001,
+      "entropy": 0
+    },
+    {
+      "token": "learning",
+      "df_percent": 51.6,
+      "entropy": 0
+    },
+    {
+      "token": "model",
+      "df_percent": 50.2,
+      "entropy": 0
+    },
+    {
+      "token": "framework",
+      "df_percent": 43.6,
+      "entropy": 0
+    },
+    {
+      "token": "performance",
+      "df_percent": 42.4,
+      "entropy": 0
+    },
+    {
+      "token": "data",
+      "df_percent": 41.6,
+      "entropy": 0
+    },
+    {
+      "token": "across",
+      "df_percent": 41.4,
+      "entropy": 0
+    },
+    {
+      "token": "results",
+      "df_percent": 36.6,
+      "entropy": 0
+    },
+    {
+      "token": "using",
+      "df_percent": 36.4,
+      "entropy": 0
+    },
+    {
+      "token": "propose",
+      "df_percent": 31.8,
+      "entropy": 0
+    },
+    {
+      "token": "methods",
+      "df_percent": 31.2,
+      "entropy": 0
+    },
+    {
+      "token": "show",
+      "df_percent": 30.4,
+      "entropy": 0
+    },
+    {
+      "token": "however",
+      "df_percent": 30.2,
+      "entropy": 0
+    },
+    {
+      "token": "demonstrate",
+      "df_percent": 29.799999999999997,
+      "entropy": 0
+    },
+    {
+      "token": "approach",
+      "df_percent": 28.000000000000004,
+      "entropy": 0
+    },
+    {
+      "token": "training",
+      "df_percent": 27.200000000000003,
+      "entropy": 0
+    },
+    {
+      "token": "work",
+      "df_percent": 26.400000000000002,
+      "entropy": 0
+    },
+    {
+      "token": "existing",
+      "df_percent": 25.4,
+      "entropy": 0
+    },
+    {
+      "token": "method",
+      "df_percent": 24.4,
+      "entropy": 0
+    },
+    {
+      "token": "accuracy",
+      "df_percent": 24.2,
+      "entropy": 0
+    }
+  ],
+  "taxonomy": {
+    "arxiv-1": [
+      "code",
+      "available",
+      "publicly"
+    ],
+    "arxiv-10": [
+      "forecasting",
+      "series",
+      "time",
+      "multivariate"
+    ],
+    "arxiv-11": [
+      "multi-agent",
+      "cooperative",
+      "reinforcement"
+    ],
+    "arxiv-12": [
+      "partial",
+      "differential",
+      "equations",
+      "pdes"
+    ],
+    "arxiv-13": [
+      "electronic",
+      "health",
+      "records"
+    ],
+    "arxiv-14": [
+      "iot",
+      "devices",
+      "things",
+      "internet"
+    ],
+    "arxiv-15": [
+      "bounds",
+      "upper",
+      "bound"
+    ],
+    "arxiv-16": [
+      "decision",
+      "trees",
+      "markov"
+    ],
+    "arxiv-17": [
+      "success",
+      "remarkable",
+      "rate"
+    ],
+    "arxiv-18": [
+      "intrusion",
+      "detection",
+      "anomaly"
+    ],
+    "arxiv-2": [
+      "squared",
+      "mean",
+      "error",
+      "root"
+    ],
+    "arxiv-3": [
+      "biases",
+      "inductive",
+      "bias"
+    ],
+    "arxiv-4": [
+      "years",
+      "recent",
+      "advances"
+    ],
+    "arxiv-5": [
+      "convolutional",
+      "neural",
+      "graph",
+      "networks",
+      "network"
+    ],
+    "arxiv-6": [
+      "communication",
+      "overhead",
+      "wireless"
+    ],
+    "arxiv-7": [
+      "search",
+      "space",
+      "latent"
+    ],
+    "arxiv-8": [
+      "agentic",
+      "ai",
+      "agents"
+    ],
+    "arxiv-9": [
+      "matching",
+      "flow",
+      "rectified"
+    ]
+  }
+}

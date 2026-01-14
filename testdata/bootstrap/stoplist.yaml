@@ -1,0 +1,15 @@
+# Minimal bootstrap stoplist
+# Only universal English stopwords
+terms:
+  - the
+  - a
+  - an
+  - and
+  - or
+  - in
+  - on
+  - at
+  - to
+  - for
+  - of
+  - with

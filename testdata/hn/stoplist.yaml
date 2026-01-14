@@ -1,0 +1,118 @@
+# Hacker News Domain Stoplist
+# Generated from corpus analysis of 50 HN stories
+
+terms:
+  # Universal stopwords (English)
+  - the
+  - a
+  - an
+  - and
+  - or
+  - but
+  - in
+  - on
+  - at
+  - to
+  - for
+  - of
+  - with
+  - by
+  - from
+  - is
+  - are
+  - was
+  - were
+  - be
+  - been
+  - being
+  - have
+  - has
+  - had
+  - do
+  - does
+  - did
+  - will
+  - would
+  - could
+  - should
+  - may
+  - might
+  - can
+  - it
+  - its
+  - this
+  - that
+  - these
+  - those
+  - what
+  - which
+  - who
+  - when
+  - where
+  - why
+  - how
+  - you
+  - your
+  - i
+  - we
+  - they
+  - them
+  - their
+  - my
+  - our
+
+  # HN-specific stopwords
+  - hn
+  - news
+  - hacker
+  - show
+  - ask
+  - tell
+  - item
+  - id
+
+  # URL components (noise tokens)
+  - http
+  - https
+  - www
+  - com
+  - org
+  - io
+  - net
+  - co
+  - github
+  - blog
+  - post
+  - posts
+  - html
+  - source
+
+  # Generic verbs/actions
+  - using
+  - built
+  - made
+  - like
+  - get
+  - use
+  - make
+  - build
+  - see
+  - find
+
+  # Meta/filler words
+  - something
+  - things
+  - stuff
+  - just
+  - really
+  - very
+  - quite
+  - some
+  - all
+  - any
+  - also
+  - too
+  - more
+  - most
+  - much
+  - many

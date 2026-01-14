@@ -1,0 +1,78 @@
+# Korel Stopword List - Hacker News / Tech Domain
+
+terms:
+  # Articles
+  - the
+  - a
+  - an
+
+  # Conjunctions
+  - and
+  - or
+  - but
+  - if
+  - while
+  - though
+
+  # Prepositions
+  - in
+  - on
+  - at
+  - to
+  - from
+  - for
+  - with
+  - by
+  - of
+  - about
+  - between
+  - under
+  - over
+  - into
+
+  # Pronouns
+  - this
+  - that
+  - these
+  - those
+  - it
+  - its
+  - he
+  - she
+  - they
+  - we
+  - you
+  - i
+
+  # Auxiliary verbs
+  - is
+  - are
+  - was
+  - were
+  - be
+  - been
+  - has
+  - have
+  - had
+  - can
+  - could
+  - will
+  - would
+  - should
+
+  # HN/Tech generic terms
+  - show
+  - ask
+  - hn
+  - why
+  - how
+  - what
+  - when
+  - where
+  - now
+  - using
+  - used
+  - make
+  - made
+  - get
+  - got

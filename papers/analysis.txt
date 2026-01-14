@@ -1,0 +1,410 @@
+Technical Specification: Vincent Granville’s xLLM (LLM 2.0) Architecture
+
+Overview and Architecture Flow
+
+xLLM (LLM 2.0) is a new generation large-language-model architecture designed as a correlation engine rather than a massive neural network ￼. It emphasizes structured retrieval of knowledge from a corpus using co-occurrence statistics and knowledge graph context, yielding hallucination-free, explainable results with zero model parameters (no neural weights) and no GPU required ￼ ￼. The system consists of a backend (ingestion and “training” phase that builds in-memory knowledge tables from corpora) and a frontend (query processing and retrieval phase) working in tandem ￼ ￼. Figure 1 below illustrates the high-level data flow for query processing in xLLM:
+
+Figure 1: xLLM query processing pipeline. The prompt is tokenized into multi-tokens (including knowledge-graph tokens and regular tokens). A global multi-token-to-ID index yields candidate text entities (chunks) by their IDs. Each candidate chunk’s attributes (multi-tokens present, counts, lengths, types) contribute to a relevancy score. Scores are computed per chunk ID and used to rank and select results【30†】.
+
+At a high level, xLLM ingests a corpus (web pages, documents, PDFs, databases, etc.), breaks it into chunks of text with contextual metadata, and builds multiple backend tables capturing the corpus structure ￼ ￼. These include an index of which chunks contain which tokens, a correlation table of token co-occurrences with a Pointwise Mutual Information metric, dictionaries of multi-word terms (multi-tokens), and mappings for categories, tags, and other context. Unlike traditional LLMs, xLLM leverages the corpus’s intrinsic taxonomy and knowledge graph (e.g. site hierarchy, tags, cross-references) discovered via smart crawling ￼. It stores data in-memory using nested hash tables (hierarchical dictionaries) for efficient sparse lookups ￼, enabling infinite context window retrieval across the entire knowledge base ￼.
+
+During querying, xLLM tokenizes the user prompt, filters out stopwords, and extracts multi-tokens (contiguous or closely-associated words treated as a single token) ￼. It optionally expands synonyms/variants of query terms to improve recall ￼. The engine then uses an inverted index to fetch all candidate chunks containing any of the query tokens ￼. Each candidate chunk is evaluated by a scoring engine that computes a relevancy score based on multiple factors (token matches, rare or multi-word token presence, context matches, chunk length, etc.) ￼ ￼. The top-ranked chunks are returned as answer cards, each a concise “knowledge card” with a snippet of the text, the source reference, and the relevancy score ￼ ￼. The user interface allows results to be presented in structured sections (cards, lists, or full text) rather than one long completion ￼, and users can click a card to retrieve the full chunk content (including any images/tables) ￼.
+
+Key innovations of xLLM include: hierarchical chunking (two-level chunks with parent-child relations for deep content like slides or sections) ￼, multi-indexing (each chunk has multiple indices: e.g. document ID, section ID, position, etc., to support fine-grained retrieval) ￼ ￼, knowledge-graph tokens (“g-tokens” gleaned from categories, titles, tags in the corpus) that carry extra weight ￼, contextual tokens (“c-tokens” for words appearing close together but not contiguous in text) ￼, and a custom PMI-based similarity measure instead of vector embeddings ￼ ￼. The architecture is designed to be modular and explainable: every component (crawling, tokenization, indexing, scoring) is transparent and adjustable, enabling real-time fine-tuning of parameters without retraining ￼ ￼.
+
+Below, we detail each component of the xLLM engine, describing its role, input/output, and how it fits into the ingestion (backend “training”) or querying (frontend) pipeline.
+
+Corpus Crawler and Ingestor (Data Ingestion & Chunking)
+
+Role: Gather raw textual data from various sources and convert it into a structured xLLM corpus file. This involves retrieving content, breaking it into logical chunks, and capturing contextual metadata (e.g. categories, tags, titles) for each chunk ￼ ￼.
+
+Process: The ingestor uses smart crawling tailored to the corpus type ￼. For web sources, it performs web crawling; for PDF repositories, it parses documents; for databases, it runs queries ￼. Crucially, smart crawling not only extracts raw text but also preserves or reconstructs the corpus structure: for example, it captures taxonomy hierarchies (category > subcategory), breadcrumbs, section titles, and cross-links present in the source content ￼ ￼. These become contextual elements attached to chunks (we refer to such metadata as the corpus’s knowledge graph) ￼.
+
+The content is split into chunks (text entities) by logical separators rather than fixed token count ￼ ￼. For instance, a chunk might be a paragraph, a section, a list item, or a subsection of a PDF. Each chunk is assigned a unique ID (or composite multi-index if hierarchical) ￼ ￼. Chunks are variable in length but tuned to be small enough for targeted retrieval; the average chunk size can be adjusted as a parameter to balance context vs. precision ￼ ￼. Two-level hierarchical chunking is used in structured documents (like slides or chapters): a parent chunk (e.g. a slide or section) has child chunks (e.g. bullet points, subsections), and tables map parent-to-child and child-to-parent relationships ￼. This multi-index chunking allows deep retrieval – e.g. a query can return a sub-section but still reference the parent context (document, page, etc.) ￼ ￼.
+
+For each chunk, the crawler records contextual fields where available, such as:
+	•	Title or heading of the chunk (if the source has headings),
+	•	Category/Section labels (from a site’s taxonomy or document structure),
+	•	Tags or keywords (either extracted from metadata or later assigned),
+	•	Related item links (e.g. “see also” references, if present in content),
+	•	Source identifier (URL or document/page reference),
+	•	Indicators for presence of tables, images, or lists within the chunk ￼,
+	•	Agent label if determinable (e.g. if text appears to be a definition, an instruction, a Q&A, etc., it may get an agent tag like “definition” or “how-to”) ￼ ￼.
+
+All this information is serialized into an xLLM file (a JSONL or similar) where each line represents one chunk as a JSON object ￼. Output: Each chunk entry includes at least:
+
+{
+  "id": "<ChunkID>",
+  "text": "<chunk content>",
+  "title": "<chunk title or heading>",
+  "categories": ["<cat1>", "<cat2>", ...],
+  "tags": ["..."],
+  "agents": ["..."],
+  "source": "<URL_or_DocRef>",
+  "children": ["<ID1>", "<ID2>", ...],   // if hierarchical
+  "parent": "<ParentID>",               // if hierarchical
+  "hasTable": true/false,
+  "hasImage": true/false
+}
+
+This corpus JSON is the raw material for subsequent processing ￼. At this stage, basic cleaning is done (remove duplicate content, boilerplate, etc.), including a distillation step to drop near-duplicate chunks if the crawl captured redundant text ￼. The system may apply backend deduping to ensure each unique piece of content is indexed only once ￼.
+
+Example: In Vincent Granville’s first xLLM instance, he crawled the entire Wolfram MathWorld website (~15,000 URLs, ~5,000 categories) and extracted each article or section as a chunk, leveraging the site’s taxonomy (category tree) as context for each chunk ￼ ￼. The output was an xLLM JSON file with each math topic section annotated by its category path, related topics, and unique ID.
+
+Tokenization and Stopword Filtering
+
+Role: Convert chunk text into a list of tokens, emphasizing multi-word tokens. Remove insignificant words (stopwords) to focus on meaningful terms ￼ ￼.
+
+Tokenization: xLLM uses a custom tokenizer that respects phrases and domain-specific terms. Rather than breaking everything into subword pieces, it tries to keep words intact and identify multi-word expressions as single multi-tokens ￼ ￼. For example, “real estate” might be treated as one token “real_estate” (also denoted as “real~estate”) ￼. The tokenizer minimizes excessive stemming or lemmatization to avoid losing important distinctions (e.g. it avoids conflating “race” and “racing” if that would confuse meaning) ￼. It also handles punctuation, capitalization and accents carefully so as not to break tokens inappropriately (these can be critical in certain corpora) ￼.
+
+Stopword Filtering: A domain-specific stopwords list is built during preprocessing ￼ ￼. Common function words (e.g. “the”, “is”, “and”), very frequent general terms, and any corpus-specific filler words are included. There are typically two stopword lists:
+	•	A backend stopwords list: words ignored when building the corpus index ￼ ￼. During crawling, these words are dropped from chunks to not bloat the index with trivial tokens.
+	•	A frontend (query) stopwords list: words ignored in user prompts ￼. This may include question words like “how”, “what” which, while ignored in retrieval matching, are still interpreted by agents for user intent (for instance, “how” might trigger a “how-to” agent but is not used as a search keyword) ￼ ￼.
+
+The stopword lists can differ between the corpus and query to reflect their different roles ￼. They are also adaptive: after initial ingestion, analysts can review the most frequent tokens and add more to stopwords if needed (or remove some) ￼. Vincent Granville notes that examining the top 50 most frequent multi-tokens in the corpus helps identify domain-specific stopwords or words that should not be stemmed away ￼.
+
+Output: For each chunk, the result is a filtered token list. Importantly, the tokens include:
+	•	Single-word tokens: e.g. “data”, “model”.
+	•	Multi-word tokens: contiguous phrases detected (e.g. “large language model” might be captured as “large_language_model” or as separate tokens depending on frequency).
+	•	Graph tokens (g-tokens): tokens that come from context fields like category names or tags ￼. These might be stored separately or flagged with a type.
+	•	Contextual tokens (c-tokens): tokens representing words that co-occur in the chunk but not next to each other (for backend use in correlation) ￼. For example, from “data science books”, one might form a c-token “data^books” to indicate “data” and “books” appear in the same chunk with some words in between ￼. (These c-tokens are used in computing correlations but are not explicitly part of the normal text index.)
+
+All tokens can be normalized to lowercase (unless case is meaningful). Stemming may be applied to reduce variants, but xLLM uses it carefully. If stemming is on in the backend, it will also be applied in query processing for consistency ￼. Additionally, an un-stemming dictionary is built to recover or map stemmed forms to real words for display and synonym matching ￼.
+
+Multi-Token Extraction (Phrase Detection)
+
+Role: Identify and record multi-tokens, i.e. meaningful phrases of two or more words, in the corpus. This step enriches the tokenization by treating frequent or significant word combinations as single units, which improves retrieval precision and the quality of correlation statistics ￼ ￼.
+
+Detection method: xLLM employs a frequency and correlation-based approach to extract multi-word terms:
+	•	It constructs n-grams (contiguous word sequences) from chunk text (for n=2,3,4… up to a limit).
+	•	These n-grams are filtered by frequency and significance. Very common combinations that carry little meaning might be discarded (or listed as stop-phrases). Conversely, even infrequent but domain-specific phrases can be kept if they appear in taxonomy or titles.
+	•	The system uses a sorted n-grams table technique to manage phrase variations without combinatorial explosion ￼. Essentially, it stores a sorted representation of multi-word tokens: e.g. for phrase “data science book”, it stores key “bookdatascience” (alphabetically sorted words). Under that key, it records all observed orderings (“data science book”, “science book data”, etc.) and their counts ￼. This allows the engine to match a prompt phrase in any word order to the actual phrase as it appears in corpus, retrieving the correct ordering from the table ￼.
+	•	It also captures non-adjacent associations as c-tokens if needed (as mentioned earlier, “word1^word2” meaning word1 and word2 appear in the same chunk within a certain window). These are like skip-grams that help measure contextual association even if not side by side ￼.
+
+The output of this process is a corpus dictionary of tokens:
+	•	Each entry can be a single word or multi-word token.
+	•	For each multi-token, the dictionary stores its frequency (how many chunks it appears in or total occurrences) and possibly the list of chunk IDs containing it ￼ ￼.
+	•	The dictionary may also note the token type (regular word vs. multi-word vs. g-token) for later weighting ￼.
+
+For example, after processing, the system might have:
+
+"data science" – appears in 120 chunks
+"data" – appears in 300 chunks
+"science" – appears in 250 chunks
+"deep learning" – appears in 50 chunks
+
+etc. These multi-tokens will be treated as units during indexing and querying.
+
+Storage: Multi-tokens and their stats are stored in backend tables such as llm5_dictionary.txt or llm5_word_list.txt in the GitHub repository (which list all tokens and possibly their frequencies) ￼ ￼. A compressed n-grams table stores the sorted keys for multi-tokens and their variations ￼. This enables lookups to map any permutation of a multi-token back to a canonical form found in the corpus ￼.
+
+Significance: Multi-token extraction is crucial for xLLM’s performance. By operating on words and phrases (like “real estate” as one token) rather than just subword tokens, xLLM reduces the token count dramatically and retains semantic accuracy ￼. As Vincent Granville notes, “Few tokens: ‘real estate San Francisco’ is 2 tokens” in xLLM (since “real_estate” and “San_Francisco” might each be one) whereas in a standard LLM that would be broken into many subwords ￼. This approach improves relevancy and lowers memory use.
+
+Category and Tag Assignment (Contextual Labeling)
+
+Role: Enhance each chunk with categories, tags, and agents as additional metadata, either by extracting from the corpus or by assigning via algorithms post-crawl. This effectively integrates a knowledge graph into the LLM: chunks know their thematic category, related topics, and content type, which the query engine can leverage ￼ ￼.
+
+Category Integration: If the corpus inherently has a taxonomy (like topics and subtopics on a website or sections in documents), the crawler captures those relationships. For example, in the Wolfram corpus, each article belonged to a category hierarchy which was recorded ￼ ￼. These categories are stored as category tokens (g-tokens) attached to the chunk ￼. In xLLM, knowledge graph tokens (categories, titles, etc.) are given higher weight in retrieval because they represent conceptual context ￼.
+
+If a corpus lacks an explicit taxonomy, xLLM can perform post-crawling categorization. This may involve:
+	•	Clustering chunks based on their content (e.g. using vector embeddings or token overlap) to infer groups that can serve as categories ￼.
+	•	Using simple pattern matching or rules to tag chunks. For instance, if certain keywords indicate a chunk is an “FAQ” or a “tutorial”, it can be tagged accordingly as an agent type.
+	•	Augmenting with external knowledge: e.g. scanning for known glossary terms, or adding tags like “HasTable” or “HasImage” based on chunk content ￼.
+
+Agent Labeling: An agent in xLLM denotes the type of information a chunk represents or the intent it can serve ￼. For example, agents could be “definition”, “how-to instruction”, “code snippet”, “summary”, etc. xLLM assigns agents to chunks either via clustering or rule-based on patterns (e.g. chunks that start with “How to” might get a “how-to” agent) ￼ ￼. These agent tags are stored in the chunk’s metadata. At query time, the user can explicitly select an agent (intent) to filter results (for instance, only retrieve “definitions”) ￼ ￼. This bottom-up agent assignment (done in the backend on the corpus) contrasts with standard LLMs which try to infer intent on the fly from the prompt alone ￼ ￼.
+
+Tagging: Additional tags can be added for special purposes:
+	•	Tags marking sensitive content or permissions, used to enforce that certain chunks only appear for authorized users (an enterprise feature) ￼.
+	•	Tags indicating external source vs. internal (if corpus was augmented with external data, chunks can be tagged and later the UI can denote them, to build trust) ￼ ￼.
+	•	Tags for presence of visuals: e.g. chunk has an image, a table, a bullet list – to support UI icons or filtering ￼ ￼.
+
+Output & Storage: The result is that each chunk’s context fields (category, tags, agents, etc.) are populated. These are stored in the xLLM JSON and also in separate lookup tables:
+	•	Category-to-chunk map: a table mapping category names to list of chunk IDs under that category (and possibly vice versa) ￼ ￼.
+	•	Agent-to-chunk map: mapping agent labels to chunks.
+	•	Tag indices: e.g. a list of all chunks with tag="external" or hasImage=true, etc.
+
+In the open-source repository, files like llm5_hash_category.txt, llm5_hash_related.txt, and llm5_hash_see.txt likely correspond to knowledge graph mappings (categories, related topics, “see also” references) extracted from the corpus ￼ ￼. These provide an internal knowledge graph that xLLM can use to enhance retrieval. Notably, xLLM typically uses the corpus’s own knowledge graph rather than constructing one from scratch, unless the corpus is poorly structured – in which case the above methods provide a workaround ￼.
+
+Inverted Index and Co-occurrence Counter
+
+Role: Build the core data structures that power retrieval:
+	1.	An inverted index mapping each token (word or multi-token) to the set of chunk IDs in which it appears ￼.
+	2.	A co-occurrence matrix counting how often each pair of tokens appears together in the same chunk (or within a context window) – this underlies the correlation/PMI engine.
+
+Inverted Index Construction: As chunks are processed, xLLM populates a dictionary where each token points to all chunk IDs containing it ￼. Because xLLM deals with multi-tokens, these index entries can be multi-word keys. For example:
+
+Index:
+"data" -> [ID1, ID2, ID5, ...]
+"data_science" -> [ID2, ID8, ...] 
+"machine_learning" -> [ID3, ID9, ID10, ...]
+
+This allows quick lookup of relevant chunks given a token. In practice, this index is stored as a nested hash for efficiency (token -> {chunkID: count}) in memory ￼. It can also be persisted as a JSON or database table. A transposed index (or local index) can be created at query time: essentially filtering the global index down to just the tokens present in the query ￼ ￼. That local index maps each query token to chunks, which is then merged to find candidate chunks (see Query Processing section below).
+
+Co-occurrence Counting: xLLM counts token co-occurrences to capture how strongly terms are related within the corpus. The co-occurrence is defined within a single chunk (or a bounded context inside a chunk, like a sentence or paragraph). Since chunks are generally of manageable size, xLLM often treats the chunk as the context window for co-occurrence ￼ ￼. (If chunks are large, a smaller sliding window can be used within them to avoid false associations; xLLM’s algorithm can compute co-occurrences in linear time relative to chunk length, avoiding nested loops, by using efficient passes through tokens ￼.)
+
+Algorithm (pseudo-code) for co-occurrence:
+
+initialize coocc_count = {}  (nested hash or dict of dicts)
+for each chunk in corpus:
+    let tokens = unique tokens in this chunk (after stopword filtering)
+    for each pair (A, B) of tokens in this chunk:
+        if A != B:
+            coocc_count[A][B] += 1
+            coocc_count[B][A] += 1
+
+This yields a sparse matrix of token pair counts. (The implementation uses nested hashes: e.g. coocc_count[A] is a dict of tokens co-occurring with A and their counts ￼. A pair that never occurs is simply absent, making it space-efficient.) Notably, xLLM can treat multi-tokens as atomic here, so it counts co-occurrences of e.g. “data_science” with “GPU” just as it would single words.
+
+To limit noise, some pairs may be ignored: if either token is a very common word, its pair counts might be less meaningful. Also, pairs of tokens that are extremely frequent together might indicate a multi-token that should have been merged (if not already). The system’s compression mechanism using sorted n-grams effectively reduces spurious pair counting by consolidating phrase tokens ￼ ￼ (for example, “New~York” is treated as one token rather than two co-occurring “New” and “York”).
+
+Output:
+	•	The token index (global dictionary: token -> list of chunk IDs) is a primary output that will be used at query time ￼. In the GitHub, files like llm5_ngrams_table.txt likely contain such mappings or a variant thereof ￼.
+	•	The co-occurrence table (token -> { related token: count, … }). This is used next to compute PMI and to build the “embedding” suggestions table ￼ ￼. The co-occurrence data might not be fully exposed in the interface, but it’s available for computing correlations and could be stored on disk for large corpora.
+
+PMI Calculator (Correlation Engine)
+
+Role: Compute the Pointwise Mutual Information (PMI) between tokens to quantify how strongly two tokens are associated in the corpus. PMI values feed into building a correlation graph of tokens and are used for suggesting related terms and potentially re-ranking results.
+
+Pointwise Mutual Information: For two tokens A and B, PMI is defined as:
+PMI(A, B) = \log \frac{P(A,B)}{P(A)\,P(B)}
+where P(A) is the probability a random chunk contains A, P(B) is same for B, and P(A,B) is the probability a random chunk contains both A and B. In practice, these probabilities are estimated from counts: if N is total number of chunks,
+	•	P(A) ≈ count(A) / N (number of chunks containing A over total chunks),
+	•	P(A,B) ≈ coocc_count(A,B) / N (number of chunks containing both over total).
+
+xLLM computes a generalized PMI suited for its multi-token approach ￼ ￼:
+	•	It uses chunk occurrence counts for A and B (so “occurrences” are typically counted at chunk level, not raw frequency).
+	•	It adjusts for token length or specificity: the Enhanced PMI (E-PMI) adds penalties or boosts based on certain factors ￼ ￼. For example, multi-tokens containing more words might naturally have lower occurrence, so the metric can give them a slight boost. Also, if A and B share words (like “linear model” and “linear regression” share “linear”), E-PMI might incorporate that overlap ￼ ￼.
+	•	The PMI score is then standardized to [0,1] for convenience ￼ ￼. After computing raw PMI (which could be any positive number), xLLM normalizes it – possibly by dividing by a maximum or using a sigmoid – so that 0 means no association and 1 means strongest association observed.
+
+Output: The result is a table of related tokens with scores. You can think of it as a token similarity/association matrix. For each token A, we can derive a list of other tokens B ranked by PMI(A,B). xLLM leverages this in two ways:
+	•	Embedding table: Instead of conventional vector embeddings, xLLM maintains variable-length embedding lists of related tokens for each token ￼ ￼. For example, the table might say: “deep_learning” → {“neural_network”: 0.95, “backpropagation”: 0.60, “machine_learning”: 0.50, …} (hypothetically). These are essentially knowledge-based embeddings: each token’s neighborhood in the graph of PMI correlations. This is stored sparsely (only significant correlations) using nested hashes as well ￼.
+	•	Alternate prompt suggestions: When a user enters a prompt, the system can use the PMI graph to suggest related multi-tokens that the user might want to include or explore ￼. For instance, if the prompt is about “neural networks”, xLLM might suggest “deep learning” or “backpropagation” as related terms via the embedding table, which the user can add with one click ￼. This is an enhancement to exhaustivity and helps cover knowledge gaps.
+
+It’s worth noting xLLM avoids vector databases and high-dimensional embeddings altogether – all similarity is computed via PMI/E-PMI and looked up by hash, which is extremely fast and requires no neural calculations ￼ ￼. This trade-off yields slightly different behavior than cosine similarity on embeddings, but with fine-tuned E-PMI it can capture semantic relations effectively in an explainable way (since you can trace a high PMI to actual co-occurrences in documents) ￼ ￼.
+
+Self-tuning of PMI: The PMI/E-PMI formula in xLLM has parameters (for weighting multi-token length, overlap, etc.) that can be tuned. These could be considered part of the backend hyperparameters. Users (developers) can adjust them and re-run the PMI computation globally if needed. Typically, though, the defaults are chosen to balance domain coverage and specificity.
+
+Storage and Data Model
+
+xLLM’s backend data is stored in a combination of in-memory nested hashes and persistent text/JSON files. The design emphasizes simple, lightweight data structures that can be implemented in any language. Below are key data models:
+	•	Chunk Store: As described, the corpus is stored as a JSONL file (or a table) where each record = one chunk with all its fields ￼. This is the master copy of corpus content.
+	•	Token Dictionary: A list of all tokens (single or multi-word) in the corpus with their global frequencies. This can be a JSON array or a table with columns: token, count, type. (In GitHub: llm5_dictionary.txt and/or llm5_word_list.txt serve this purpose, containing tokens and counts ￼ ￼.)
+	•	Inverted Index: A mapping from token → chunk IDs. Data model options:
+	•	JSON example: A dictionary where keys are tokens and value is list of chunk IDs (or list of (chunkID, freq_in_chunk) pairs if needed). E.g.
+
+{
+  "data": ["ID1","ID2","ID5",...],
+  "data_science": ["ID2","ID8",...],
+  ...
+}
+
+
+	•	Relational: A table TokenIndex(token, chunk_id) with one row per occurrence (which could be large).
+	•	Nested hash (in memory): e.g. index[token][id] = 1 marking presence.
+Often a compressed form is used since most tokens appear in relatively few chunks (especially multi-word tokens). xLLM may compress the posting lists or use the sorted n-grams trick to reduce entries ￼.
+
+	•	Co-occurrence/PMI Table: This can be seen as a graph adjacency list. Each token has an entry listing other tokens and a weight.
+	•	For persistence, a JSON could represent it as:
+
+{
+   "tokenA": { "tokenB": 0.8, "tokenC": 0.5, ... },
+   "tokenB": { "tokenA": 0.8, "tokenD": 0.4, ... },
+   ...
+}
+
+Here the values could be PMI scores (normalized) or raw co-occurrence counts or both. In practice, xLLM likely stores only significant associations (PMI above a threshold) to keep this sparse.
+
+	•	In memory, this is exactly a nested hash: e.g. assoc[A][B] = p for PMI p. Vincent Granville describes that a parent key can be a vector (pair of tokens) with a child hash as value, which is analogous to storing matrix entries in dictionaries ￼. Functions are provided to invert such a hash (swap keys) which is like transposing the matrix ￼.
+
+	•	Context Mappings: These include category map, tag map, agent map, etc. Each is essentially an index:
+	•	Category index: category name → [chunk IDs] (and possibly chunk ID → category).
+	•	Tag index: tag → [chunk IDs].
+	•	These can be simple JSON dictionaries as well.
+	•	Synonym/Stem Dictionary: A mapping to handle variant terms. For example, a map of base word → list of inflections or synonyms. xLLM builds a custom un-stemming map for each corpus ￼. For instance:
+
+{
+  "game": ["games","gaming","gamer"],
+  "analysis~variance": ["anova"], 
+  ...
+}
+
+This helps map query terms to corpus terms (if user asks about “games” but corpus only has “gaming”, the system knows to treat them similarly after stemming) ￼.
+
+	•	Frontend Query Tables: At query time, xLLM loads or derives quick-access tables like:
+	•	q_dictionary: a filtered dictionary of just the terms needed for the query (prompt tokens, their synonyms, etc.) ￼.
+	•	q_embeddings: similar idea for just the subset of the embedding/PMI table relevant to prompt tokens (so it can suggest related terms fast) ￼.
+These are essentially slices of the backend data, loaded into memory per query for efficiency.
+
+All these data can be stored in a single database or as flat files since the data sizes are manageable, especially with multi-tokens reducing volume. The repository shows that most tables are just text files (which can be memory-mapped or loaded into dicts easily in Python) ￼ ￼. The emphasis is on in-memory operation for speed – the entire knowledge base can be loaded into RAM as nested dictionaries (which is feasible for enterprise corpora after the reduction in tokens) ￼.
+
+Example data model (JSON Schemas):
+	•	Chunk JSON schema:
+
+Chunk {
+  id: string, 
+  text: string,
+  title: string?,
+  categories: string[]?,
+  tags: string[]?,
+  agents: string[]?,
+  source: string?,
+  parent: string?,
+  children: string[]?,
+  hasImage: boolean?,
+  hasTable: boolean?
+}
+
+	•	Index JSON schema:
+
+Index {
+  token: string -> ChunkList
+}
+ChunkList: string[]  // array of chunk IDs
+
+	•	Cooccurrence JSON schema:
+
+Associations {
+  token: string -> {
+     related_token: string -> score: number
+  }
+}
+
+These structures are straightforward to implement in any language (e.g. as hash maps or dictionaries). In fact, language agnosticism is a goal: the architecture does not rely on any specialized ML library – it’s mostly counting and lookup, which can be done with basic data structures ￼. This makes it portable to Go, Java, etc., not just Python.
+
+Query Processing and Card Retrieval Engine
+
+Role: Process a user’s prompt using the prepared indexes and return relevant information “cards”. This is the main inference flow (though it’s deterministic lookup rather than model inference).
+
+When a query comes in, xLLM executes the following steps (pseudocode incorporated):
+	1.	Parse Prompt & Initial Processing: The prompt text is taken and tokenized similarly to how corpus text was (though typically simpler). This yields a list of prompt tokens. Then frontend stopwords are removed ￼. For example, a query “What are neural networks?” would yield tokens ["neural", "networks"] after removing “what”, “are” (stopwords/questions). The engine also recognizes if the user included operators or special syntax (xLLM’s UI may allow exact match quotes, negative keywords, etc. as search options ￼).
+	2.	Multi-Token and Synonym Expansion: The prompt tokens are analyzed to detect multi-tokens. If the user typed a multi-word phrase that matches a known multi-token in the dictionary, it will be treated as one (e.g. “artificial intelligence” becomes artificial_intelligence). Also, xLLM may expand synonyms or variants for prompt tokens to improve recall ￼. This is where the synonyms/un-stemming dictionary is used. For each prompt token:
+	•	If it’s not found in the corpus dictionary, check if its stem or synonym exists. E.g. user says “games”, corpus has “gaming”; the system maps “games” → “game” (stem) → finds “gaming” in corpus and adds that as a search token ￼.
+	•	If an acronym or alias is known (like “analysis~variance” ↔ “anova”), it adds the alternate token ￼.
+These added tokens (sometimes called s-tokens for synonym tokens) might be given a slightly lower weight in scoring since they were not an exact user term ￼ ￼, but they help ensure nothing relevant is missed.
+	3.	Agent and Sub-LLM Selection: If the user or system has specified an agent or sub-LLM filter, it’s applied. For example, the user might select the “Definition” agent in the UI, which means xLLM should only consider chunks labeled as definitions ￼ ￼. Similarly, if the user narrowed the query to a specific sub-corpus (sub-LLM), e.g. only the “Probability & Statistics” section of Wolfram, the engine limits the search to that subset (which might mean using only the index for that sub-LLM) ￼ ￼. This selection drastically cuts down irrelevant candidates and latency.
+	4.	Candidate Retrieval via Index: Using the prompt token set (after expansion), xLLM retrieves a set of candidate chunk IDs. Pseudocode:
+
+prompt_tokens = {...}  // set of tokens after steps 1-3
+candidate_chunks = ∅
+for each token in prompt_tokens:
+    if Index[token] exists:
+        for each chunk_id in Index[token]:
+            if passes_filter(chunk_id):
+                add chunk_id to candidate_chunks
+
+Here passes_filter ensures the chunk is in the allowed sub-LLM/category and correct agent if those filters apply. The result is the union of all chunks that contain at least one of the prompt tokens ￼ ￼. Note: if the user used an exact match option for a phrase, the engine would intersect or enforce that phrase’s presence accordingly (logic can accommodate AND/OR depending on advanced search options).
+Because xLLM tokens are mostly significant terms, this candidate list is usually not overwhelmingly large (and can be further pruned by requiring at least one multi-token match, etc., as part of scoring).
+
+	5.	Scoring and Ranking (Relevancy Engine): Each candidate chunk is then scored against the prompt. We detail this in the next section, but essentially xLLM computes multiple sub-scores for each chunk and combines them into a final relevancy score ￼ ￼. This stage may also involve:
+	•	If too many candidates (say thousands), doing a preliminary filter. For example, xLLM might first rank by a primary criterion (like number of prompt tokens matched) and only fully score the top subset.
+	•	Conversely, if too few candidates, it might relax some criteria or use the PMI table to pull in chunks that don’t have the exact tokens but have strongly correlated ones. (This is more advanced: effectively a recall boost using the correlation engine. xLLM primarily uses correlation for suggestions, but it could be used to expand results if needed.)
+	6.	Card Synthesis: The top-scoring chunks (e.g. top 5 or 10) are then formatted as result cards ￼. Each card includes:
+	•	A concise snippet of the chunk’s text (by default perhaps the first sentence or a summary).
+	•	The chunk’s title or category context (to give user an idea of source/section).
+	•	The relevancy score (usually normalized 0 to 10) for transparency ￼ ￼.
+	•	A reference (e.g. a hyperlink or index) to view the full chunk in context (when clicked, user sees the full text, image, etc. from that chunk) ￼.
+	•	Possibly tags or source info (like “PDF” or “Internal/External” tag if relevant).
+The results can be displayed in multiple formats:
+	•	Card view: Each chunk as a box (card) with snippet and score ￼.
+	•	List view: A ranked list of answers (like a search engine list).
+	•	Full text view: If the user opts to compile a long-form answer, xLLM can concatenate or “blend” the top chunks into a single text (and optionally even feed them to a text generation model for a fluent summary) ￼ ￼. However, xLLM by itself is not generative; it focuses on retrieving actual text from the corpus, which ensures factuality.
+	7.	User Feedback Loop: The system allows iterative querying. A user could refine the query (remove or add suggested tokens, choose a different agent, etc.) and re-run. Because xLLM is fast (in-memory lookups), these iterations are near real-time. Additionally, if the UI is configured to maintain conversational context, the user can choose to carry over previous query context or not ￼ (xLLM can treat each query standalone or chain them if instructed, but since it’s not a generative model, context carry-over typically means reusing previous prompt tokens).
+
+Throughout query processing, explainability is maintained – e.g., showing scores, highlighting which tokens matched in a chunk, etc., to build user trust ￼ ￼. The user is effectively interacting with a smart search engine that has many tunable knobs, rather than a black-box model.
+
+The above workflow (especially steps 4-6) is summarized in Figure 1 (the diagram) where prompt tokens flow through synonyms and corpus dictionaries to produce chunk matches and then go into scoring【30†】.
+
+Relevancy Scoring Engine
+
+Role: Compute a relevancy score for each candidate chunk given a prompt, to rank the results. xLLM’s scoring is multi-factor and transparent, aiming to capture not just keyword overlap but also result quality indicators like specificity and context match ￼ ￼.
+
+xLLM typically computes several sub-scores for each chunk, then combines them. The main factors include ￼ ￼:
+	•	Token Match Count: How many of the prompt’s multi-tokens appear in the chunk ￼. More matches generally means more relevance.
+	•	Token Type Weighting: If the matching tokens are multi-word tokens (as opposed to single words) or particularly rare tokens in the corpus, they contribute extra weight ￼ ￼. The intuition is that a chunk containing a specific multi-word phrase from the query, or a less common keyword, is more likely to be on-point.
+	•	Contextual Match: If any prompt tokens appear in the chunk’s context fields (title, categories, tags) that is a strong signal ￼ ￼. For example, if you search “Fourier transform” and a chunk’s title contains “Fourier Transform”, that chunk should be boosted.
+	•	Chunk Length/Size: Longer chunks may be given a slight boost ￼ ￼ (they likely contain more detail or comprehensive info). This prevents a trivial one-line chunk from outranking a more informative section, assuming both match the query.
+	•	Overlap of multiple tokens: If a chunk has more than one of the prompt tokens, especially in combination, that synergy is valuable ￼ ￼. (This is partly captured by match count, but the scoring can nonlinearly reward having, say, 3 out of 3 tokens vs. just 1 out of 3.)
+	•	Knowledge Graph tokens: If a chunk contains a graph token (category/tag) that matched the query, it might be weighted higher (because that often means the chunk’s overarching topic matches the query topic) ￼.
+	•	Recency or Source (optional): In some configurations, if xLLM tracks content dates or source trust levels, it could adjust score for freshness or source priority. (This is more of a front-end parameter if implemented; some enterprise users may want newer documents to rank higher, etc. The question hints at recency search option ￼.)
+
+Each of these factors yields a numeric sub-score or rank. Vincent Granville’s approach is to rank chunks on each criterion separately and then aggregate ranks rather than raw values ￼. This avoids any one criterion dominating due to scale. Specifically:
+	•	For each criterion (say MatchCount, ContextMatch, Length), sort the candidate chunks by that criterion and assign a rank (1 = best).
+	•	Then compute a weighted sum of these ranks for each chunk to get a final score ￼. Weights are tunable parameters reflecting the importance of each aspect.
+	•	Lower combined rank = better (or convert to a 0-10 score where 10 is best). The final scores are often normalized to a 0–10 or 0–100 scale for user display ￼.
+
+For example, pseudocode for scoring a single chunk:
+
+score_chunk(chunk, prompt_tokens):
+    matches = count( t in prompt_tokens that appear in chunk )
+    rare_matches = count( t in prompt_tokens that appear in chunk AND freq(t) < RareThreshold )
+    context_matches = count( t in prompt_tokens that appear in chunk.context_fields )
+    length = chunk.word_count
+    // Compute sub-ranks or sub-scores:
+    R1 = rank_of(matches) among candidates (higher better)
+    R2 = rank_of(rare_matches) among candidates
+    R3 = rank_of(context_matches) among candidates
+    R4 = rank_of(length) among candidates
+    // weighted combination (lower is better since rank1 = best):
+    combined_rank = w1*R1 + w2*R2 + w3*R3 + w4*R4
+    normalized_score = normalize(combined_rank)  // invert and scale to 0-10
+    return normalized_score
+
+In practice, instead of actually ranking for each chunk, one can derive formulae. But conceptually it’s about combining these factors in a balanced way ￼.
+
+The outcome is each candidate chunk gets a score (say 0 to 10, where 10 means very relevant). The retrieval engine then picks the top-N (e.g. N=10) chunks above a certain score threshold to return ￼ ￼. If a chunk’s score is below threshold, it’s excluded (this threshold might be dynamically adjusted to yield a reasonable number of results).
+
+The scores are exposed to the user in the UI – xLLM makes a point of showing them to indicate confidence ￼ ￼. This is akin to a search engine showing relevance, and it helps users trust the system (e.g. a low score warns the user the answer might be incomplete due to corpus gaps ￼ ￼).
+
+New “PageRank”: Granville refers to this scoring mechanism as the new PageRank for LLM/RAG ￼, highlighting that it’s a way to rank answers analogous to how Google ranks pages but using different signals tailored to LLM context. It is entirely different from neural model “confidence” – it’s an explainable composite metric.
+
+Front-end tuning: The user (or developer) can fine-tune the weights w1, w2, etc., in real time via the UI sliders or config, because these are simple numeric parameters ￼ ￼. If a user decides that they want more exhaustive answers, they might increase the weight on rare token matches, etc., and re-run the query. This level of control is unique to xLLM’s transparent scoring.
+
+Answer Card Generation
+
+After scoring, xLLM generates the output answer format. Each Answer Card encapsulates one chunk result:
+	•	Title/Heading: If the chunk has a title (or if a category is very descriptive), that can be used as the card’s header. Otherwise, the system may generate a short title from the content (for example, the first few words or a truncated sentence) to display.
+	•	Snippet: A short excerpt from the chunk text that best matches the query. Often this is just the first sentence or two of the chunk, or the portion where the query tokens appear (highlighted) for context. Since xLLM chunks are already reasonably small and focused, the snippet might even be the whole chunk if it’s just a few lines ￼. If the chunk is long, the snippet is a preview with an option to expand.
+	•	Source reference: A link or reference indicator to the original document or webpage. xLLM knows the source URL or document ID from the chunk metadata, so it can provide a clickable link or simply an identifier like “[Doc1, p.5]”. This is crucial for traceability – every answer has an exact source ￼.
+	•	Relevancy Score: Displayed on the card (e.g. “Score: 8.7/10”). This helps the user gauge the confidence and possibly understand why a lower-scored item might be less complete ￼ ￼.
+	•	Context tags (optional): Some UIs might show small tags on the card like the category (“Topic: Probability Theory”) or agent (“Type: Definition”) to further contextualize the result.
+
+Cards are interactive. Clicking a card will show the full chunk: the complete text, and if that chunk had associated images or tables, those are shown too ￼. xLLM stores images and tables separately with pointers (each image/table is indexed by an ID that references the parent chunk) ￼ ￼, so the system knows which media to display when the chunk is opened. This approach keeps the initial answer view clean and concise but allows deep dives.
+
+If the user requested a different output format (xLLM supports listing format or a single text output ￼ ￼), the engine can also assemble the chunks accordingly. For a listing, it might just show titles with links. For a single text answer, xLLM might concatenate the top answers or feed them to a writing algorithm. Vincent Granville suggests that for long text generation, one could plug in a specialized model or use template-based generation, but those are optional augmentations on top of xLLM’s core retrieval ￼.
+
+Real-time aspects: The answer cards generation is so fast (just lookup and string assembly) that xLLM can also provide features like:
+	•	Bulk processing: The user could input multiple queries at once, and xLLM could process them in batch (since it’s not model-bound).
+	•	Cache: Popular prompts’ results can be cached for instant response ￼.
+	•	Debug mode: A mode where the card might show even more info (like which tokens matched, intermediate scores, etc.) for developers to debug the retrieval and scoring behavior ￼.
+
+Self-Tuning and Feedback Mechanisms
+
+A distinguishing feature of xLLM is its ability to be self-tuned and easily user-tuned without retraining models ￼ ￼. There are several feedback loops and adaptive components:
+	•	Real-Time Hyperparameter Tuning: The front-end exposes various parameters – e.g. weights for scoring factors, whether to use PMI suggestions, the length of context window, whether to allow partial matches, etc. Power users (or developers) can adjust these knobs in real time and immediately see the effect on results ￼. Since everything is rule-based, the system’s behavior changes predictably with such adjustments. For instance, a user could increase the weight for context_matches if they notice results are ignoring titles, etc.
+	•	Self-Tuning Defaults: xLLM can monitor how users tweak these parameters and which settings lead to more user-satisfied outcomes (if such feedback is available). Over time, it can learn the popular combinations of parameters that users prefer and make those the new default or offer them as presets ￼ ￼. This is akin to a light reinforcement learning loop: user adjustments that are frequently made indicate the default wasn’t optimal, so the system self-adjusts (with developer oversight). Granville calls this reinforcement via user choices self-tuning ￼.
+	•	Stopwords and Synonyms Update: If during use it becomes clear some irrelevant term is frequently coming up, it can be added to the stopwords and the index rebuilt (which in xLLM is not as costly as retraining an ML model – it’s just reprocessing text). Similarly, if users frequently search a term not in the corpus, developers might add a synonym mapping or incorporate new content to cover that gap. These updates can be folded in periodically as part of corpus maintenance. xLLM’s architecture encourages iterative improvement: add a new dictionary entry, or re-crawl an updated corpus, and just rebuild the tables.
+	•	Taxonomy Expansion: In enterprise settings, as new content is added, new categories might emerge. xLLM can integrate those by updating the category/tag tables. If users often query something that isn’t well categorized, that might prompt adding a tag for it. Also, as noted in the Nvidia case, contextual elements like an index or glossary from PDFs can be turned into new tags or knowledge graph entries post-hoc ￼ ￼. The system is flexible to blend in these expansions either by recrawling or by an addon process that appends new context to chunks.
+	•	Logging and Analytics: xLLM can log queries, selected results, etc. (with privacy considerations). These logs can be analyzed to see where the engine might be failing (e.g. queries that returned low scores or no results – indicating content gap or indexing issue). This can lead to adding content or adjusting parsing rules. Since xLLM is explainable, one can often pinpoint why a query failed (e.g. maybe a key term was mistakenly in stopwords, or a multi-word phrase wasn’t captured).
+	•	Fine-Tuning vs. Retraining: xLLM distinguishes frontend fine-tuning (instantly adjusting those parameters) and backend fine-tuning (rebuilding the backend tables with new settings or data) ￼ ￼. Backend fine-tuning might be done when adding a large new data source – you’d re-run the ingestion. But it’s still far cheaper than neural training: it’s essentially re-indexing, which could be done in minutes or hours for very large corpora, but not days or weeks. Frontend tuning (like adjusting weights) is immediate and user-driven, requiring no backend rebuild.
+
+In short, the system is designed for continuous improvement: as new knowledge is gained or preferences change, the architecture easily accommodates updates (add more sub-LLMs, tweak a weight, expand a dictionary) without needing to retrain a giant model or start from scratch ￼ ￼. This is particularly useful in enterprise where data and requirements evolve – xLLM can be kept up-to-date via configuration and incremental data ingestion.
+
+Implementation Notes and Differences from Enterprise Version
+
+Vincent Granville has made a substantial portion of xLLM available via his public GitHub repository “VincentGranville/Large-Language-Models”, including code and data for many components ￼ ￼. However, some features described in articles/slides are implemented only in advanced (enterprise) versions or are conceptual additions. Below we clarify what is in the public implementation versus what is described theoretically:
+	•	Open-Source Implementation (GitHub): The repository contains:
+	•	Data ingestion tools: e.g. a Python script tor_crawling.py for crawling websites (the Wolfram example) ￼. It also includes sample crawled pages and the entire processed corpus (as a stats file) for reference ￼ ￼.
+	•	Backend tables generation: The code and sample output for building token indices, n-grams tables, and embeddings. For instance, xLLM6 folder on GitHub includes Python code to produce the multi-token embeddings (PMI tables) for the upgraded version with multi-token support ￼. The previous version xLLM5 (also in the repo) has the base implementation ￼. The presence of files like llm5_compressed_ngrams_table.txt, llm5_hash_category.txt, llm5_embeddings.txt etc. indicates that the code can output these structures ￼ ￼.
+	•	Example corpora and results: The repo provides an anonymized Fortune 100 company corpus with its backend tables and output, as well as the Wolfram MathWorld case ￼. It even has some documentation in the form of a project PDF (Projects4.pdf) describing the approach ￼.
+	•	Core algorithms: Many of the “home-made” functions (e.g. for nested hash operations, un-stemming logic, sorted n-grams compression) are implemented in the Python code and documented. Granville emphasizes limited reliance on external libraries – meaning the repo code shows custom handling of text processing issues (like avoiding the pitfalls of naive pluralization or autocorrect) ￼ ￼.
+In summary, the public repo implements the core backend: crawling, chunking, building indices, PMI calculations, and it demonstrates retrieval logic. One can run these scripts on a corpus to reproduce the xLLM tables and perform queries via code.
+	•	Enterprise-Only / Described Features: Certain features discussed in his posts and talks go beyond what is openly released:
+	•	Modern Web UI: The slick web interface with card view, agent selection drop-down, and real-time sliders for parameters is likely proprietary or not provided in the open code. The open code is Python-based; an enterprise UI (with web API endpoints) was built but details are in his book, not in the repo ￼.
+	•	LLM Router / Multi-LLM Orchestration: The concept of having many specialized sub-LLMs and a router to dispatch queries among them is described (xLLM can be deployed as multiple instances for different domains, and aggregated) ￼. While the architecture supports it, any actual router code or multi-LLM management is not explicitly provided in the open source. It’s more a blueprint that one can launch multiple xLLM instances by category.
+	•	External Tool Integration: In slides, Granville shows xLLM integrating with external APIs (e.g. a Code generation API, Wolfram Alpha for math, etc.) ￼ ￼. These integrations (which turn xLLM into an agentic system that can solve math or generate code) are likely not part of the public repo. They were prototyped for demo (e.g., calling Wolfram for calculation).
+	•	Auto-Indexing and Cataloging: Upcoming features like automatically generating an index for a corpus or cataloging content are mentioned ￼ but not yet open-sourced. The Nvidia PDF case study on multi-index chunking is partially in GitHub (there are files prefixed with “PDF” for that case) ￼ ￼, but it references a chapter in his book for full details. Likely the specialized PDF parsing code (with font size detection, etc.) is shared in part, but may require manual setup.
+	•	Security and Authorization: The enterprise version allows restricting certain sub-LLMs or chunks to authorized users only ￼. Implementation of that (user authentication, access control lists) would be company-specific and is not in the generic open code.
+	•	Continuous Learning: While xLLM doesn’t “train” in the ML sense, an enterprise deployment might include scheduled recrawling, continuous update of tables, or integration with user feedback analytics. The open project requires manual rerun to update; an enterprise setup likely automates this pipeline.
+	•	Assumptions/Simplifications: In writing this spec, we assume a relatively static corpus that’s been processed. Real-world deployment might need connectors to content management systems, etc., but those are outside core architecture. We also describe PMI usage primarily for suggestion and correlation; one could imagine using the PMI scores directly in ranking if, say, a query token wasn’t present but a correlated token was – however, the spec keeps it simple (candidates need to share tokens with prompt, as per current design). Also, we assume the multi-tokens are mostly contiguous phrases; xLLM’s notion of c-tokens covers some non-contiguous cases, but the implementation likely doesn’t exhaustively index all skip-grams (it would be too much). It probably focuses on adjacent words and known multi-word terms, which is a practical simplification.
+
+In conclusion, the xLLM architecture as specified above is implementable in a language-agnostic way using basic data structures (hash maps, lists) and algorithms (crawling, parsing, set intersections). The public code provides a reference implementation in Python for key pieces, validating the approach. The enterprise extensions build on this foundation with improved UI, scalability (distributed sub-LLMs), and integration capabilities, but do not fundamentally alter the core components described. This specification captures the essence of Vincent Granville’s LLM 2.0 (xLLM) – a modular, explainable, correlation-driven engine for large language model tasks, emphasizing accuracy, relevancy, and efficiency over brute-force model size ￼ ￼.
+
+Sources: The above design is synthesized from Granville’s writings and repository, notably his Data Science Central articles and BondingAI/MLTechniques blog posts that detail xLLM features ￼ ￼ ￼ ￼ ￼ ￼, as well as the open-source code repository which contains implementation artifacts ￼ ￼. All key architectural elements – from smart crawling and taxonomy extraction ￼ to multi-token PMI embeddings ￼ and the new scoring engine ￼ – are drawn from these publicly available resources.

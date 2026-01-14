@@ -1,0 +1,74 @@
+# Example lexicon synonym mappings
+# This file demonstrates the format for defining synonym groups and variants.
+#
+# Usage:
+#   lex, err := lexicon.LoadFromYAML("configs/synonyms.example.yaml")
+#   tokenizer.SetLexicon(lex)
+#
+# Each synonym group has:
+# - canonical: The normalized form that all variants map to
+# - variants: List of alternative forms (can include the canonical for clarity)
+#
+# When tokenizing, all variants normalize to the canonical form:
+# - "gaming" → "game"
+# - "ML" → "ml"
+# - "analysis of variance" → "anova"
+#
+# Best practices:
+# - Use lowercase for canonical forms
+# - Include morphological variants (singular/plural, verb forms)
+# - Include common abbreviations and expansions
+# - Test with your corpus to ensure coverage
+
+synonyms:
+  # Gaming/entertainment domain
+  - canonical: game
+    variants: [game, games, gaming, gamer, gamers]
+
+  # Machine learning / AI domain
+  - canonical: ml
+    variants: [ml, ML, machine learning, machine-learning]
+
+  - canonical: ai
+    variants: [ai, AI, artificial intelligence, artificial-intelligence]
+
+  - canonical: llm
+    variants: [llm, LLM, large language model, large-language-model]
+
+  # Analysis/statistics domain
+  - canonical: analyze
+    variants: [analyze, analysis, analytical, analyzer, analysing, analysed]
+
+  - canonical: anova
+    variants: [anova, ANOVA, analysis of variance, analysis~variance]
+
+  - canonical: regression
+    variants: [regression, regressions, regress, regressed]
+
+  # Development/programming domain
+  - canonical: api
+    variants: [api, API, apis, APIs]
+
+  - canonical: database
+    variants: [database, databases, db, DB]
+
+  - canonical: framework
+    variants: [framework, frameworks, fw]
+
+  # Research domain
+  - canonical: paper
+    variants: [paper, papers, article, articles, publication, publications]
+
+  - canonical: research
+    variants: [research, researching, researched, researcher, researchers]
+
+  - canonical: study
+    variants: [study, studies, studied, studying]
+
+# Notes on multi-token variants:
+# - Multi-token phrases like "machine learning" are tokenized separately by default
+# - They work for single-token lookups (e.g., normalizing "ML" to "ml")
+# - For phrase matching, use the multi-token parser in the ingest pipeline
+#
+# Example: "machine learning" tokenizes to ["machine", "learning"]
+#          Unless you use multi-token parser which handles "machine learning" as one unit

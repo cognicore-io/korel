@@ -1,0 +1,187 @@
+# Hacker News Taxonomy
+# Tech/startup news domain
+
+sectors:
+  ai:
+    - ai
+    - artificial intelligence
+    - machine learning
+    - deep learning
+    - neural network
+    - gpt
+    - llm
+    - large language model
+    - natural language processing
+    - nlp
+    - computer vision
+    - reinforcement learning
+    - transformer
+    - diffusion
+    - stable diffusion
+    - midjourney
+    - openai
+    - anthropic
+
+  programming:
+    - programming
+    - code
+    - coding
+    - developer
+    - software
+    - framework
+    - library
+    - language
+    - python
+    - javascript
+    - typescript
+    - rust
+    - go
+    - golang
+    - java
+    - c++
+    - ruby
+    - php
+    - compiler
+    - interpreter
+    - algorithm
+    - data structure
+
+  web:
+    - web
+    - website
+    - browser
+    - chrome
+    - firefox
+    - safari
+    - html
+    - css
+    - react
+    - vue
+    - angular
+    - frontend
+    - backend
+    - full stack
+    - http
+    - api
+    - rest
+    - graphql
+    - websocket
+
+  security:
+    - security
+    - vulnerability
+    - exploit
+    - hack
+    - hacker
+    - breach
+    - attack
+    - malware
+    - ransomware
+    - phishing
+    - encryption
+    - cryptography
+    - zero day
+    - cve
+    - penetration test
+    - firewall
+    - vpn
+
+  opensource:
+    - open source
+    - oss
+    - github
+    - gitlab
+    - license
+    - mit
+    - apache
+    - gpl
+    - contribution
+    - maintainer
+    - fork
+    - pull request
+    - commit
+
+  startup:
+    - startup
+    - founder
+    - funding
+    - venture capital
+    - vc
+    - series a
+    - series b
+    - seed round
+    - ipo
+    - acquisition
+    - exit
+    - unicorn
+    - y combinator
+    - yc
+    - investor
+    - pitch
+    - product market fit
+
+  devops:
+    - devops
+    - kubernetes
+    - k8s
+    - docker
+    - container
+    - cloud
+    - aws
+    - azure
+    - gcp
+    - serverless
+    - lambda
+    - ci/cd
+    - jenkins
+    - gitlab ci
+    - github actions
+    - terraform
+    - ansible
+    - monitoring
+    - observability
+
+  database:
+    - database
+    - sql
+    - nosql
+    - postgres
+    - postgresql
+    - mysql
+    - mongodb
+    - redis
+    - elasticsearch
+    - cassandra
+    - neo4j
+    - graph database
+    - data warehouse
+    - bigquery
+    - snowflake
+
+  mobile:
+    - mobile
+    - ios
+    - android
+    - app
+    - swift
+    - kotlin
+    - flutter
+    - react native
+    - mobile development
+
+  blockchain:
+    - blockchain
+    - crypto
+    - cryptocurrency
+    - bitcoin
+    - ethereum
+    - nft
+    - defi
+    - smart contract
+    - web3
+    - solidity
+
+events: {}
+regions: {}
+entities:
+  companies: {}

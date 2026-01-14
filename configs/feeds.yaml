@@ -1,0 +1,48 @@
+# RSS/Atom Feed Configuration for Korel Indexer
+# Note: These are example feeds for demonstration purposes
+
+feeds:
+  - name: "Energy Policy News"
+    type: rss
+    url: "https://example.com/energy/policy/rss.xml"
+    categories:
+      - policy
+      - europe
+    enabled: true
+
+  - name: "Solar Industry Daily"
+    type: rss
+    url: "https://example.com/solar/rss"
+    categories:
+      - solar
+      - market
+    enabled: true
+
+  - name: "Wind Power Updates"
+    type: rss
+    url: "https://example.com/wind/feed.xml"
+    categories:
+      - wind
+      - market
+    enabled: true
+
+  - name: "European Commission Energy"
+    type: rss
+    url: "https://ec.europa.eu/energy/rss"
+    categories:
+      - policy
+      - europe
+    enabled: false  # Example of disabled feed
+
+# Crawl settings
+crawl:
+  interval_minutes: 30
+  max_articles_per_feed: 50
+  user_agent: "Korel/0.1 (Knowledge Retrieval Bot)"
+  timeout_seconds: 10
+  respect_robots_txt: true
+
+# Deduplication
+dedup:
+  method: url_hash
+  lookback_days: 7

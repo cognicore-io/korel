@@ -1,0 +1,7 @@
+# Minimal taxonomy for bootstrap
+# System will discover categories from content
+sectors: {}
+events: {}
+regions: {}
+entities:
+  companies: {}

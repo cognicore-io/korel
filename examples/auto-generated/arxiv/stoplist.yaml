@@ -1,0 +1,79 @@
+# Korel Stopword List - arXiv / Academic Domain
+
+terms:
+  # Articles
+  - the
+  - a
+  - an
+
+  # Conjunctions
+  - and
+  - or
+  - but
+  - if
+  - while
+  - though
+  - although
+  - however
+
+  # Prepositions
+  - in
+  - on
+  - at
+  - to
+  - from
+  - for
+  - with
+  - by
+  - of
+  - about
+  - between
+  - through
+  - during
+
+  # Pronouns
+  - this
+  - that
+  - these
+  - those
+  - it
+  - its
+  - we
+  - our
+
+  # Auxiliary verbs
+  - is
+  - are
+  - was
+  - were
+  - be
+  - been
+  - has
+  - have
+  - had
+  - can
+  - could
+  - will
+  - would
+
+  # Academic generic terms
+  - paper
+  - study
+  - research
+  - work
+  - approach
+  - method
+  - propose
+  - proposed
+  - present
+  - presented
+  - show
+  - shown
+  - demonstrate
+  - use
+  - used
+  - based
+  - novel
+  - new
+  - results
+  - conclusion

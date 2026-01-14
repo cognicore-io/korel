@@ -1,0 +1,15 @@
+# Example configuration for cmd/ai-chat
+# Copy to configs/ai-chat.yaml and adjust paths as needed.
+db_path: ./data/korel.db
+stoplist: configs/stoplist.yaml
+dict: configs/tokens.dict
+taxonomy: configs/taxonomies.yaml
+rules: configs/rules/ai.rules
+
+# Number of cards to retrieve per question
+top_k: 3
+
+llm:
+  base_url: https://api.openai.com/v1/chat/completions
+  model: gpt-4o-mini
+  api_key: "${OPENAI_API_KEY}"

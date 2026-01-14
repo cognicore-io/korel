@@ -1,0 +1,35 @@
+# Korel Multi-Token Dictionary
+# Format: canonical|variant1|variant2|category
+
+# Policy terms
+feed-in tariff|fit|fip|policy
+tax credit|itc|ptc|policy
+power purchase agreement|ppa|policy
+renewable energy certificate|rec|policy
+net metering|policy
+
+# Finance terms
+capital expenditure|capex|finance
+operating expenditure|opex|finance
+internal rate of return|irr|finance
+net present value|npv|finance
+levelized cost of energy|lcoe|finance
+
+# Technology terms
+photovoltaics|pv|photovoltaic|solar
+concentrated solar power|csp|solar
+battery energy storage system|bess|storage
+lithium-ion battery|li-ion|storage
+inverter|pcs|power conversion system|solar
+
+# Market terms
+gigawatt|gw|market
+megawatt|mw|market
+kilowatt|kw|market
+kilowatt-hour|kwh|market
+megawatt-hour|mwh|market
+
+# Corporate terms
+original equipment manufacturer|oem|finance
+initial public offering|ipo|finance
+mergers and acquisitions|m&a|finance

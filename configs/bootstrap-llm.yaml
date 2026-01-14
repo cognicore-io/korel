@@ -1,0 +1,154 @@
+# Bootstrap LLM Review Configuration
+# Used by: go run ./cmd/bootstrap --llm-config=configs/bootstrap-llm.yaml
+
+# LLM endpoint (choose one)
+endpoint:
+  base_url: "http://localhost:11434/v1"  # Ollama local
+  model: "llama2"
+  api_key: ""
+  temperature: 0.2
+  max_tokens: 2000
+
+# For OpenAI:
+# endpoint:
+#   base_url: "https://api.openai.com/v1"
+#   model: "gpt-4"
+#   api_key_env: "OPENAI_API_KEY"
+#   temperature: 0.2
+#   max_tokens: 2000
+
+# For Azure:
+# endpoint:
+#   base_url: "https://YOUR_RESOURCE.openai.azure.com"
+#   model: "gpt-4"
+#   api_key_env: "AZURE_OPENAI_KEY"
+#   azure_deployment: "gpt-4-deployment"
+#   temperature: 0.2
+#   max_tokens: 2000
+
+# Review tasks
+tasks:
+  # Task 1: Stopword validation
+  stopwords:
+    enabled: true
+    system_prompt: |
+      You are a linguistic expert reviewing stopword candidates.
+      Stopwords are generic terms with little semantic value that should be filtered from search queries.
+      Approve only truly generic terms that add no value to search.
+
+    user_prompt_template: |
+      Review these stopword candidates for a {{DOMAIN}} corpus.
+
+      Guidelines:
+      - APPROVE: URL components (https, com, www), universal words (the, a, is), meaningless filler (hn, post)
+      - REJECT: Technical terms (database, api), proper nouns (company names), query-worthy terms
+
+      Candidates with document frequency:
+      {{CANDIDATES}}
+
+      Return ONLY a JSON array of approved token strings:
+      ["token1", "token2", "token3"]
+
+    review_limit: 20  # Only review top 20, auto-approve rest if DF > 90%
+
+  # Task 2: Multi-token phrase discovery
+  multi_tokens:
+    enabled: true
+    system_prompt: |
+      You are a domain expert identifying technical phrases that should be treated as single concepts.
+      Multi-token phrases are terms where the combination has specific meaning beyond individual words.
+
+    user_prompt_template: |
+      Identify meaningful phrases from these high PMI (Pointwise Mutual Information) token pairs.
+      PMI measures how strongly two words co-occur.
+
+      Guidelines:
+      - APPROVE: Technical terms (machine learning), compound concepts (open source), industry terms (venture capital)
+      - REJECT: Grammatical patterns (very good), generic combinations (big company), just co-occurrence (see attached)
+
+      Token pairs with PMI scores:
+      {{PAIRS}}
+
+      Return ONLY a JSON array of objects:
+      [
+        {"phrase": "machine learning", "category": "ai"},
+        {"phrase": "open source", "category": "programming"}
+      ]
+
+    min_pmi: 2.0      # Only review pairs with PMI >= 2.0
+    review_limit: 50  # Review top 50 pairs
+
+  # Task 3: Taxonomy generation
+  taxonomy:
+    enabled: true
+    system_prompt: |
+      You are creating a category taxonomy for an information retrieval system.
+      Categories should be clear, mutually exclusive where possible, and comprehensive for the domain.
+
+    user_prompt_template: |
+      Create a taxonomy structure for this {{DOMAIN}} corpus.
+
+      Analyze these frequent terms with their common context words:
+      {{TERMS}}
+
+      Create 5-10 top-level categories, each with 10-20 relevant keywords.
+      Use industry-standard category names.
+
+      Return ONLY JSON:
+      {
+        "sectors": {
+          "category_id": {
+            "name": "Display Name",
+            "keywords": ["keyword1", "keyword2", ...]
+          }
+        }
+      }
+
+    top_terms: 100  # Analyze top 100 frequent terms
+
+  # Task 4: Entity recognition
+  entities:
+    enabled: true
+    system_prompt: |
+      You are identifying named entities in technical text.
+      Classify each capitalized term by type: company, product, technology, or skip if not an entity.
+
+    user_prompt_template: |
+      Classify these capitalized terms found in a {{DOMAIN}} corpus:
+
+      {{TERMS}}
+
+      Guidelines:
+      - company: Organizations/corporations (OpenAI, Google, Microsoft)
+      - product: Software products/services (ChatGPT, Chrome, GitHub)
+      - technology: Frameworks/libraries/languages (React, PyTorch, Kubernetes)
+      - Skip: Acronyms, abbreviations, or non-entities
+
+      Return ONLY JSON:
+      {
+        "companies": ["OpenAI", "Google"],
+        "products": ["ChatGPT", "Chrome"],
+        "technologies": ["React", "PyTorch"]
+      }
+
+    review_limit: 50  # Review top 50 capitalized terms
+
+# Validation rules (applied after LLM review)
+validation:
+  stopwords:
+    auto_approve_df_threshold: 95.0  # Auto-approve if DF > 95% regardless of LLM
+    reject_df_threshold: 5.0          # Reject if DF < 5% regardless of LLM
+
+  multi_tokens:
+    min_pmi: 1.5       # Minimum PMI to accept
+    min_cooccur: 3     # Minimum co-occurrence count
+
+  taxonomy:
+    min_keywords_per_category: 5  # Each category needs at least 5 keywords
+    max_categories: 15             # Don't create more than 15 top-level categories
+
+# Logging and debugging
+logging:
+  log_prompts: true      # Log prompts sent to LLM
+  log_responses: true    # Log raw LLM responses
+  log_file: "bootstrap-llm.log"

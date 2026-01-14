@@ -1,0 +1,26 @@
+# Sample queries for testing Korel Chat CLI
+
+# Policy-focused queries
+new feed-in tariff in Italy
+hydrogen subsidies in Germany
+EU renewable energy mandates
+
+# Market queries
+battery prices
+solar capacity in Spain
+offshore wind auction results
+
+# Finance queries
+utility earnings renewable energy
+solar IPO Europe
+capital expenditure solar projects
+
+# Technology queries
+microinverter efficiency
+battery storage systems
+lithium-ion prices
+
+# Cross-category queries
+Italy solar policy and utility investment
+renewable energy targets Europe
+green hydrogen production subsidies

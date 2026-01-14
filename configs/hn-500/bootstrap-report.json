@@ -1,0 +1,263 @@
+{
+  "generated_at": "2025-11-10T16:46:33.26026+01:00",
+  "total_docs": 499,
+  "stopwords": [
+    "a",
+    "about",
+    "above",
+    "after",
+    "again",
+    "against",
+    "all",
+    "am",
+    "an",
+    "and",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "been",
+    "before",
+    "being",
+    "below",
+    "between",
+    "both",
+    "but",
+    "by",
+    "can",
+    "did",
+    "do",
+    "does",
+    "doing",
+    "down",
+    "during",
+    "each",
+    "few",
+    "for",
+    "from",
+    "further",
+    "had",
+    "has",
+    "have",
+    "having",
+    "he",
+    "her",
+    "here",
+    "hers",
+    "herself",
+    "him",
+    "himself",
+    "his",
+    "how",
+    "i",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "itself",
+    "just",
+    "me",
+    "more",
+    "most",
+    "my",
+    "myself",
+    "no",
+    "nor",
+    "not",
+    "now",
+    "of",
+    "off",
+    "on",
+    "once",
+    "only",
+    "or",
+    "other",
+    "our",
+    "ours",
+    "ourselves",
+    "out",
+    "over",
+    "own",
+    "re",
+    "same",
+    "she",
+    "should",
+    "so",
+    "some",
+    "such",
+    "than",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "themselves",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "to",
+    "too",
+    "under",
+    "until",
+    "up",
+    "very",
+    "was",
+    "we",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "who",
+    "whom",
+    "why",
+    "will",
+    "with",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves"
+  ],
+  "pairs": null,
+  "high_df_tokens": [
+    {
+      "token": "the",
+      "df_percent": 23.847695390781563,
+      "entropy": 0
+    },
+    {
+      "token": "to",
+      "df_percent": 19.639278557114228,
+      "entropy": 0
+    },
+    {
+      "token": "and",
+      "df_percent": 18.43687374749499,
+      "entropy": 0
+    },
+    {
+      "token": "of",
+      "df_percent": 18.236472945891784,
+      "entropy": 0
+    },
+    {
+      "token": "in",
+      "df_percent": 16.03206412825651,
+      "entropy": 0
+    },
+    {
+      "token": "for",
+      "df_percent": 14.629258517034069,
+      "entropy": 0
+    },
+    {
+      "token": "with",
+      "df_percent": 9.819639278557114,
+      "entropy": 0
+    },
+    {
+      "token": "on",
+      "df_percent": 9.819639278557114,
+      "entropy": 0
+    },
+    {
+      "token": "is",
+      "df_percent": 9.418837675350701,
+      "entropy": 0
+    },
+    {
+      "token": "from",
+      "df_percent": 9.01803607214429,
+      "entropy": 0
+    },
+    {
+      "token": "hn",
+      "df_percent": 7.414829659318638,
+      "entropy": 0
+    },
+    {
+      "token": "it",
+      "df_percent": 7.014028056112225,
+      "entropy": 0
+    },
+    {
+      "token": "you",
+      "df_percent": 7.014028056112225,
+      "entropy": 0
+    },
+    {
+      "token": "are",
+      "df_percent": 6.4128256513026045,
+      "entropy": 0
+    },
+    {
+      "token": "that",
+      "df_percent": 6.4128256513026045,
+      "entropy": 0
+    },
+    {
+      "token": "show",
+      "df_percent": 5.811623246492986,
+      "entropy": 0
+    },
+    {
+      "token": "by",
+      "df_percent": 5.61122244488978,
+      "entropy": 0
+    },
+    {
+      "token": "can",
+      "df_percent": 5.01002004008016,
+      "entropy": 0
+    },
+    {
+      "token": "my",
+      "df_percent": 5.01002004008016,
+      "entropy": 0
+    },
+    {
+      "token": "as",
+      "df_percent": 5.01002004008016,
+      "entropy": 0
+    }
+  ],
+  "taxonomy": {
+    "hn-fallback": [
+      "using",
+      "get",
+      "python",
+      "make",
+      "use",
+      "like",
+      "video",
+      "see",
+      "love",
+      "would",
+      "browser",
+      "feedback",
+      "open-source",
+      "programming",
+      "built",
+      "code",
+      "language",
+      "project",
+      "building",
+      "simple",
+      "time",
+      "people",
+      "also",
+      "data",
+      "software"
+    ]
+  }
+}

@@ -1,0 +1,81 @@
+# Korel Taxonomy Configuration
+# Domain: Energy & Renewables News
+
+sectors:
+  solar:
+    - solar
+    - photovoltaics
+    - pv
+    - rooftop
+    - utility-scale
+  wind:
+    - wind
+    - offshore
+    - onshore
+    - turbine
+  storage:
+    - battery
+    - storage
+    - grid-scale
+    - lithium
+  hydrogen:
+    - hydrogen
+    - electrolyzer
+    - fuel-cell
+
+events:
+  policy:
+    - feed-in tariff
+    - subsidy
+    - tender
+    - auction
+    - regulation
+    - mandate
+    - tax-credit
+  finance:
+    - capital expenditure
+    - capex
+    - guidance
+    - earnings
+    - dividend
+    - investment
+    - funding
+  market:
+    - price
+    - capacity
+    - installation
+    - deployment
+    - demand
+
+regions:
+  italy:
+    - italy
+    - italian
+    - rome
+    - ita
+  germany:
+    - germany
+    - german
+    - berlin
+    - de
+  spain:
+    - spain
+    - spanish
+    - madrid
+    - es
+  eu:
+    - europe
+    - european
+    - eu
+    - brussels
+
+entities:
+  tickers:
+    ENEL:
+      - enel
+      - enel spa
+    IBERDROLA:
+      - iberdrola
+    ENPHASE:
+      - enphase
+      - enph

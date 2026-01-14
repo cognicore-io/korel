@@ -1,0 +1,34 @@
+# Korel Configuration
+
+db_path: ./data/korel.db
+snapshot_dir: ./data/snapshots
+
+# Paths to configuration files
+dict_path: testdata/news/tokens.dict
+taxonomy_path: testdata/news/taxonomies.yaml
+stoplist_path: testdata/news/stoplist.yaml
+
+# Hybrid scoring weights
+score_weights:
+  alpha_pmi: 1.0        # PMI importance
+  beta_cats: 0.6        # category overlap
+  gamma_recency: 0.8    # time decay
+  eta_authority: 0.2    # link authority
+  delta_len: 0.05       # length penalty
+
+# Recency calculation
+# Documents lose half their recency score after this many days
+recency_halflife_days: 14
+
+# Self-tuning thresholds for stopword detection
+stopword_thresholds:
+  df_percent: 80.0      # appears in >80% of documents
+  pmi_max: 0.1          # maximum PMI with any token <0.1
+  cat_entropy: 0.8      # category entropy >0.8 (uniform distribution)
+
+# PMI calculation
+pmi_epsilon: 1.0        # smoothing constant
+
+# Indexing
+batch_size: 100
+commit_interval_seconds: 60

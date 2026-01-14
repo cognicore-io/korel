@@ -1,0 +1,90 @@
+# Korel Stopword List
+# Self-adjusting - this is the initial seed
+
+terms:
+  # Articles
+  - the
+  - a
+  - an
+
+  # Conjunctions
+  - and
+  - or
+  - but
+  - if
+  - while
+  - though
+  - although
+
+  # Prepositions
+  - in
+  - on
+  - at
+  - to
+  - from
+  - for
+  - with
+  - by
+  - about
+  - of
+  - between
+  - among
+  - under
+  - over
+  - into
+  - out
+  - up
+  - down
+  - as
+
+  # Pronouns
+  - this
+  - that
+  - these
+  - those
+  - it
+  - its
+  - he
+  - she
+  - they
+  - we
+  - you
+  - i
+
+  # Auxiliary verbs
+  - is
+  - are
+  - was
+  - were
+  - be
+  - been
+  - being
+  - has
+  - have
+  - had
+  - do
+  - does
+  - did
+  - can
+  - could
+  - should
+  - would
+  - may
+  - might
+  - must
+  - will
+  - shall
+
+  # Generic terms (news-specific)
+  - said
+  - says
+  - announced
+  - announces
+  - report
+  - reports
+  - according
+  - sources
+  - new
+  - news
+  - today
+  - yesterday

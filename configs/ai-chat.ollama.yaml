@@ -1,0 +1,12 @@
+# Example config for using Ollama locally (model: qwen3:8b)
+db_path: ./data/korel.db
+stoplist: configs/stoplist.yaml
+dict: configs/tokens.dict
+taxonomy: configs/taxonomies.yaml
+rules: configs/rules/ai.rules
+top_k: 3
+
+llm:
+  base_url: http://localhost:11434/v1/chat/completions
+  model: qwen3:8b
+  api_key: ""

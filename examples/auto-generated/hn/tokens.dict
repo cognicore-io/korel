@@ -1,0 +1,72 @@
+# Korel Multi-Token Dictionary - Hacker News / Tech Domain
+# Format: canonical|variant1|variant2|category
+
+# AI/ML terms
+machine learning|ml|ai
+deep learning|dl|ai
+neural network|nn|ai
+large language model|llm|ai
+natural language processing|nlp|ai
+computer vision|cv|ai
+reinforcement learning|rl|ai
+generative ai|gen-ai|genai|ai
+
+# Programming concepts
+object oriented programming|oop|programming
+functional programming|fp|programming
+test driven development|tdd|programming
+continuous integration|ci|devops
+continuous deployment|cd|devops
+version control system|vcs|programming
+application programming interface|api|programming
+software development kit|sdk|programming
+
+# Web/Cloud
+single page application|spa|web
+progressive web app|pwa|web
+content delivery network|cdn|web
+domain name system|dns|web
+secure sockets layer|ssl|security
+transport layer security|tls|security
+hypertext transfer protocol|http|web
+representational state transfer|rest|api|web
+
+# DevOps/Infrastructure
+infrastructure as code|iac|devops
+container orchestration|devops
+load balancer|devops
+virtual machine|vm|devops
+serverless computing|serverless|devops
+
+# Database
+structured query language|sql|database
+not only sql|nosql|database
+database management system|dbms|database
+online transaction processing|oltp|database
+online analytical processing|olap|database
+
+# Business/Startup
+venture capital|vc|startup
+initial public offering|ipo|startup
+minimum viable product|mvp|startup
+product market fit|pmf|startup
+year over year|yoy|startup
+month over month|mom|startup
+business to business|b2b|startup
+business to consumer|b2c|startup
+software as a service|saas|startup
+
+# Security
+distributed denial of service|ddos|security
+cross site scripting|xss|security
+sql injection|security
+zero day|zero-day|security
+two factor authentication|2fa|mfa|security
+end to end encryption|e2ee|security
+
+# Development practices
+code review|programming
+pull request|pr|programming
+merge request|mr|programming
+technical debt|programming
+open source software|oss|opensource

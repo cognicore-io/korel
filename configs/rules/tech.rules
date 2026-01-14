@@ -1,0 +1,61 @@
+# Technology Domain Knowledge (Hacker News)
+
+# Programming Languages
+is_a(python, programming-language)
+is_a(javascript, programming-language)
+is_a(typescript, javascript)
+is_a(go, programming-language)
+is_a(rust, programming-language)
+
+# Frameworks
+is_a(react, web-framework)
+is_a(vue, web-framework)
+is_a(angular, web-framework)
+is_a(django, web-framework)
+is_a(flask, web-framework)
+is_a(nextjs, react)
+
+# Infrastructure
+is_a(kubernetes, container-orchestration)
+is_a(docker, containerization)
+is_a(terraform, infrastructure-as-code)
+
+# Databases
+is_a(postgresql, database)
+is_a(mysql, database)
+is_a(mongodb, database)
+is_a(redis, database)
+is_a(postgresql, sql-database)
+is_a(mongodb, nosql-database)
+
+# Cloud
+is_a(aws, cloud-platform)
+is_a(gcp, cloud-platform)
+is_a(azure, cloud-platform)
+
+# Usage relationships
+used_for(react, frontend)
+used_for(django, backend)
+used_for(kubernetes, devops)
+used_for(postgresql, data-storage)
+used_for(terraform, infrastructure)
+
+# Technical relationships
+requires(react, javascript)
+requires(typescript, javascript)
+requires(kubernetes, docker)
+requires(web-framework, programming-language)
+
+# Related concepts
+related_to(docker, kubernetes)
+related_to(react, nextjs)
+related_to(javascript, typescript)
+related_to(devops, cloud-platform)
+related_to(frontend, backend)
+related_to(sql-database, nosql-database)
+
+# Alternatives
+alternative_to(react, vue)
+alternative_to(postgresql, mysql)
+alternative_to(docker, podman)
+alternative_to(kubernetes, docker-swarm)

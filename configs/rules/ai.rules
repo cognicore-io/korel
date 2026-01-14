@@ -1,0 +1,51 @@
+# AI Domain Knowledge
+# Simple rule format: relation(subject, object)
+
+# Neural Network Taxonomy
+is_a(bert, transformer)
+is_a(gpt, transformer)
+is_a(gpt-2, gpt)
+is_a(gpt-3, gpt)
+is_a(gpt-4, gpt)
+is_a(t5, transformer)
+is_a(transformer, neural-network)
+is_a(cnn, neural-network)
+is_a(rnn, neural-network)
+is_a(lstm, rnn)
+is_a(gru, rnn)
+is_a(neural-network, model)
+
+# Machine Learning Taxonomy
+is_a(supervised-learning, machine-learning)
+is_a(unsupervised-learning, machine-learning)
+is_a(reinforcement-learning, machine-learning)
+is_a(deep-learning, machine-learning)
+is_a(neural-network, deep-learning)
+
+# Application Domains
+used_for(transformer, nlp)
+used_for(bert, nlp)
+used_for(gpt, nlp)
+used_for(cnn, computer-vision)
+used_for(lstm, sequence-modeling)
+used_for(reinforcement-learning, game-playing)
+used_for(supervised-learning, classification)
+
+# Technical Requirements
+requires(transformer, attention-mechanism)
+requires(bert, pretraining)
+requires(gpt, autoregressive-training)
+requires(neural-network, backpropagation)
+requires(deep-learning, gpu)
+
+# Related Concepts
+related_to(transformer, attention-mechanism)
+related_to(bert, masked-language-modeling)
+related_to(gpt, next-token-prediction)
+related_to(neural-network, gradient-descent)
+related_to(deep-learning, representation-learning)
+
+# Alternatives
+alternative_to(lstm, transformer)
+alternative_to(rnn, transformer)
+alternative_to(cnn, vision-transformer)

@@ -1,0 +1,61 @@
+# Binaries
+/cmd/*/rss-indexer
+/cmd/*/chat-cli
+/cmd/*/bootstrap
+/cmd/*/korel-analytics
+/cmd/*/download-hn
+/cmd/*/download-arxiv
+/cmd/*/ai-chat
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.html
+
+# Go workspace file
+go.work
+go.work.sum
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Downloaded test data (keep config files: *.yaml, *.dict)
+testdata/*/docs.jsonl
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Claude Code local settings
+.claude/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Build artifacts
+dist/
+build/
+
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key

@@ -1,0 +1,101 @@
+# Korel Taxonomy - arXiv / Academic Research Domain
+
+sectors:
+  ai:
+    - artificial-intelligence
+    - ai
+    - machine-learning
+    - deep-learning
+    - neural-network
+  nlp:
+    - natural-language-processing
+    - nlp
+    - text-mining
+    - language-model
+    - transformer
+  cv:
+    - computer-vision
+    - cv
+    - image-processing
+    - object-detection
+  ml:
+    - machine-learning
+    - ml
+    - supervised-learning
+    - unsupervised-learning
+    - reinforcement-learning
+  theory:
+    - algorithm
+    - complexity
+    - optimization
+    - proof
+  systems:
+    - distributed-systems
+    - operating-systems
+    - database
+  security:
+    - cryptography
+    - security
+    - privacy
+    - encryption
+  economics:
+    - economics
+    - econometrics
+    - game-theory
+  finance:
+    - finance
+    - portfolio
+    - risk
+    - trading
+
+events:
+  methodology:
+    - novel-approach
+    - state-of-the-art
+    - sota
+    - benchmark
+    - baseline
+    - ablation-study
+  evaluation:
+    - experiment
+    - evaluation
+    - validation
+    - test-set
+    - accuracy
+    - precision
+    - recall
+  theory:
+    - theorem
+    - proof
+    - lemma
+    - conjecture
+  application:
+    - real-world
+    - case-study
+    - implementation
+
+regions:
+  institutions:
+    - university
+    - institute
+    - lab
+    - laboratory
+    - research-center
+
+entities:
+  institutions:
+    MIT:
+      - mit
+      - massachusetts-institute
+    STANFORD:
+      - stanford
+    BERKELEY:
+      - berkeley
+      - uc-berkeley
+    CMU:
+      - cmu
+      - carnegie-mellon
+    OXFORD:
+      - oxford
+    CAMBRIDGE:
+      - cambridge

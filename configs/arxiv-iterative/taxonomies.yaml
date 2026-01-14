@@ -1,0 +1,79 @@
+sectors:
+    arxiv-1:
+        - code
+        - available
+        - publicly
+    arxiv-2:
+        - squared
+        - mean
+        - error
+        - root
+    arxiv-3:
+        - biases
+        - inductive
+        - bias
+    arxiv-4:
+        - years
+        - recent
+        - advances
+    arxiv-5:
+        - convolutional
+        - neural
+        - graph
+        - networks
+        - network
+    arxiv-6:
+        - communication
+        - overhead
+        - wireless
+    arxiv-7:
+        - search
+        - space
+        - latent
+    arxiv-8:
+        - agentic
+        - ai
+        - agents
+    arxiv-9:
+        - matching
+        - flow
+        - rectified
+    arxiv-10:
+        - forecasting
+        - series
+        - time
+        - multivariate
+    arxiv-11:
+        - multi-agent
+        - cooperative
+        - reinforcement
+    arxiv-12:
+        - partial
+        - differential
+        - equations
+        - pdes
+    arxiv-13:
+        - electronic
+        - health
+        - records
+    arxiv-14:
+        - iot
+        - devices
+        - things
+        - internet
+    arxiv-15:
+        - bounds
+        - upper
+        - bound
+    arxiv-16:
+        - decision
+        - trees
+        - markov
+    arxiv-17:
+        - success
+        - remarkable
+        - rate
+    arxiv-18:
+        - intrusion
+        - detection
+        - anomaly

@@ -1,0 +1,12 @@
+# Minimal Taxonomy Seed - arXiv
+# System will discover from clustering
+
+sectors:
+  ai:
+    - ai
+    - machine-learning
+  
+# System SHOULD discover:
+# - nlp, cv, ml, theory, systems, etc.
+# - Methodologies from paper keywords
+# - Institutions from affiliations

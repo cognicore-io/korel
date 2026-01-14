@@ -1,0 +1,21 @@
+# Minimal Stopword Seed - arXiv Academic Papers
+# System will discover academic-specific stopwords from corpus
+
+terms:
+  # Universal stopwords
+  - the
+  - a
+  - an
+  - and
+  - or
+  - in
+  - on
+  - of
+  - for
+  - with
+  - by
+
+# Academic stopwords should be auto-discovered:
+# - paper, study, work, approach, method
+# - propose, present, show, demonstrate
+# - novel, new, results

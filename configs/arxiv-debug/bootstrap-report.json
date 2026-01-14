@@ -1,0 +1,689 @@
+{
+  "generated_at": "2025-11-10T20:38:48.904301+01:00",
+  "total_docs": 500,
+  "stopwords": [
+    "a",
+    "about",
+    "above",
+    "after",
+    "again",
+    "against",
+    "all",
+    "am",
+    "an",
+    "and",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "been",
+    "before",
+    "being",
+    "below",
+    "between",
+    "both",
+    "but",
+    "by",
+    "can",
+    "did",
+    "do",
+    "does",
+    "doing",
+    "down",
+    "during",
+    "each",
+    "few",
+    "for",
+    "from",
+    "further",
+    "had",
+    "has",
+    "have",
+    "having",
+    "he",
+    "her",
+    "here",
+    "hers",
+    "herself",
+    "him",
+    "himself",
+    "his",
+    "how",
+    "i",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "itself",
+    "just",
+    "me",
+    "more",
+    "most",
+    "my",
+    "myself",
+    "no",
+    "nor",
+    "not",
+    "now",
+    "of",
+    "off",
+    "on",
+    "once",
+    "only",
+    "or",
+    "other",
+    "our",
+    "ours",
+    "ourselves",
+    "out",
+    "over",
+    "own",
+    "re",
+    "same",
+    "she",
+    "should",
+    "so",
+    "some",
+    "such",
+    "than",
+    "that",
+    "the",
+    "their",
+    "theirs",
+    "them",
+    "themselves",
+    "then",
+    "there",
+    "these",
+    "they",
+    "this",
+    "those",
+    "through",
+    "to",
+    "too",
+    "under",
+    "until",
+    "up",
+    "very",
+    "was",
+    "we",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "while",
+    "who",
+    "whom",
+    "why",
+    "will",
+    "with",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves"
+  ],
+  "pairs": [
+    {
+      "A": "convnext",
+      "B": "jammer",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "multi-chiplet",
+      "B": "numa",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "poland",
+      "B": "sagemaker",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "bias-corrected",
+      "B": "cfc",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "cosmology",
+      "B": "minkowski",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "eigenvectors",
+      "B": "uncommon",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "buyer",
+      "B": "transactions",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "disaggregation-level",
+      "B": "threatens",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "feedforward",
+      "B": "qwen3-30b",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "chivit",
+      "B": "re",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "honest",
+      "B": "intra-cluster",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "explained",
+      "B": "predictive-distribution",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "etg",
+      "B": "wendelstein",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "intention",
+      "B": "sentence-t5",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "provisioning",
+      "B": "time-to-first-token",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "conjectures",
+      "B": "randomly",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "antibacterial",
+      "B": "escape",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "aapl",
+      "B": "cross-dataset",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "mastery",
+      "B": "non-interpretable",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "distributing",
+      "B": "zero-effort-miss",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "5-3",
+      "B": "unmet",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "circular",
+      "B": "locomotion",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "contend",
+      "B": "machine-readable",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "east",
+      "B": "state-level",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "habitats",
+      "B": "hotspot",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "activity-based",
+      "B": "gaap",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "bundling",
+      "B": "stays",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "bit-sliced",
+      "B": "manhattan",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "convlstm",
+      "B": "diurnal",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "intensity-modulated",
+      "B": "phoenix",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "leak",
+      "B": "muse",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "developments",
+      "B": "landings",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "lhr",
+      "B": "rtog",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "arrange",
+      "B": "junction",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "cal-ql",
+      "B": "off-the-shelf",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "collapsing",
+      "B": "low-probability",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "dsm",
+      "B": "encompass",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "compactness",
+      "B": "enns",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "calcium",
+      "B": "ctu-13",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "homeostatic",
+      "B": "pole",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "contact",
+      "B": "locally-learned",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "informing",
+      "B": "prediabetes",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "acceptance",
+      "B": "initialize",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "earth-moon",
+      "B": "station-keeping",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "categorizes",
+      "B": "public-facing",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "emphasis",
+      "B": "mahalanobis",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "contend",
+      "B": "mayhave",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "post-unlearning",
+      "B": "truly",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "adaptive-sensorless",
+      "B": "sensorless",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    },
+    {
+      "A": "hotspots",
+      "B": "threatened",
+      "PMI": 5.521460917862247,
+      "Support": 1
+    }
+  ],
+  "high_df_tokens": [
+    {
+      "token": "and",
+      "df_percent": 98.4,
+      "entropy": 0
+    },
+    {
+      "token": "the",
+      "df_percent": 98,
+      "entropy": 0
+    },
+    {
+      "token": "to",
+      "df_percent": 97.8,
+      "entropy": 0
+    },
+    {
+      "token": "of",
+      "df_percent": 94.19999999999999,
+      "entropy": 0
+    },
+    {
+      "token": "in",
+      "df_percent": 92.80000000000001,
+      "entropy": 0
+    },
+    {
+      "token": "for",
+      "df_percent": 89.8,
+      "entropy": 0
+    },
+    {
+      "token": "we",
+      "df_percent": 89.2,
+      "entropy": 0
+    },
+    {
+      "token": "that",
+      "df_percent": 88.2,
+      "entropy": 0
+    },
+    {
+      "token": "this",
+      "df_percent": 79.4,
+      "entropy": 0
+    },
+    {
+      "token": "on",
+      "df_percent": 78.60000000000001,
+      "entropy": 0
+    },
+    {
+      "token": "with",
+      "df_percent": 77.2,
+      "entropy": 0
+    },
+    {
+      "token": "is",
+      "df_percent": 69,
+      "entropy": 0
+    },
+    {
+      "token": "by",
+      "df_percent": 62.6,
+      "entropy": 0
+    },
+    {
+      "token": "as",
+      "df_percent": 60.6,
+      "entropy": 0
+    },
+    {
+      "token": "models",
+      "df_percent": 55.60000000000001,
+      "entropy": 0
+    },
+    {
+      "token": "our",
+      "df_percent": 53.400000000000006,
+      "entropy": 0
+    },
+    {
+      "token": "an",
+      "df_percent": 53,
+      "entropy": 0
+    },
+    {
+      "token": "learning",
+      "df_percent": 51.6,
+      "entropy": 0
+    },
+    {
+      "token": "model",
+      "df_percent": 50.2,
+      "entropy": 0
+    },
+    {
+      "token": "are",
+      "df_percent": 49.4,
+      "entropy": 0
+    }
+  ],
+  "taxonomy": {
+    "arxiv-fallback": [
+      "temperature",
+      "offers",
+      "dynamics",
+      "preserves",
+      "fine-tuning",
+      "data-driven",
+      "upper",
+      "non-linear",
+      "prevent",
+      "basis",
+      "healthcare",
+      "continuous",
+      "advancing",
+      "decoding",
+      "best",
+      "characterize",
+      "aggregation",
+      "due",
+      "framework",
+      "policy",
+      "collected",
+      "function",
+      "pretraining",
+      "mapping",
+      "activity",
+      "nonlinear",
+      "incorporate",
+      "enhancing",
+      "signal",
+      "analyzing",
+      "surrogate",
+      "practical",
+      "demand",
+      "presents",
+      "towards",
+      "equations",
+      "paradigms",
+      "spatial",
+      "predictions",
+      "strong",
+      "values",
+      "multivariate",
+      "development",
+      "identifies",
+      "operational",
+      "sample",
+      "employing",
+      "matrix",
+      "integration",
+      "size",
+      "two",
+      "forecasting",
+      "iterative",
+      "found",
+      "datasets",
+      "engineering",
+      "downstream",
+      "aligned",
+      "choice",
+      "established",
+      "consistently",
+      "risk",
+      "accuracy",
+      "multiple",
+      "enhanced",
+      "reliable",
+      "produces",
+      "retrieval",
+      "search",
+      "detection",
+      "theory",
+      "management",
+      "adaptation",
+      "threshold",
+      "feasibility",
+      "degradation",
+      "transformer",
+      "convergence",
+      "unit",
+      "speedup",
+      "reduced",
+      "analyze",
+      "multimodal",
+      "apply",
+      "rigorous",
+      "perform",
+      "mechanism",
+      "spaces",
+      "effective",
+      "resource",
+      "related",
+      "efficiency",
+      "interactions",
+      "action",
+      "updates",
+      "evidence",
+      "individual",
+      "direct",
+      "investigate",
+      "density",
+      "one",
+      "characterized",
+      "patients",
+      "energy",
+      "common",
+      "total",
+      "selecting",
+      "policies",
+      "universal",
+      "descent",
+      "confirm",
+      "adaptively",
+      "optimized",
+      "regimes",
+      "furthermore",
+      "techniques",
+      "errors",
+      "reasoning",
+      "bound",
+      "agentic",
+      "platforms",
+      "pre-trained",
+      "central",
+      "compromise",
+      "task-specific",
+      "five",
+      "open",
+      "language",
+      "around",
+      "planning",
+      "level",
+      "groups",
+      "trained",
+      "complementary",
+      "resource-constrained",
+      "numerical",
+      "medical",
+      "robustness",
+      "growth",
+      "designing",
+      "environments",
+      "inputs",
+      "suggest",
+      "compression",
+      "highlight",
+      "application",
+      "uniform",
+      "functions",
+      "estimated",
+      "decision-making"
+    ]
+  }
+}

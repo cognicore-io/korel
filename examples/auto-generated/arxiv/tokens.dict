@@ -1,0 +1,101 @@
+# Korel Multi-Token Dictionary - arXiv / Academic Domain
+# Format: canonical|variant1|variant2|category
+
+# Machine Learning
+machine learning|ml|ai
+deep learning|dl|ai
+neural network|nn|ai
+convolutional neural network|cnn|ai
+recurrent neural network|rnn|ai
+long short term memory|lstm|ai
+generative adversarial network|gan|ai
+transformer architecture|transformer|ai
+attention mechanism|attention|ai
+self attention|self-attention|ai
+
+# NLP
+natural language processing|nlp|ai
+language model|lm|nlp
+large language model|llm|nlp
+pre trained model|pretrained-model|nlp
+fine tuning|fine-tune|finetuning|nlp
+named entity recognition|ner|nlp
+part of speech tagging|pos-tagging|nlp
+sentiment analysis|nlp
+machine translation|mt|nlp
+
+# Computer Vision
+computer vision|cv|ai
+object detection|cv
+image classification|cv
+semantic segmentation|cv
+instance segmentation|cv
+image generation|cv
+optical character recognition|ocr|cv
+
+# Methodology
+supervised learning|ai
+unsupervised learning|ai
+reinforcement learning|rl|ai
+transfer learning|ai
+meta learning|meta-learning|ai
+few shot learning|few-shot|ai
+zero shot learning|zero-shot|ai
+active learning|ai
+
+# Evaluation
+state of the art|sota|evaluation
+baseline model|baseline|evaluation
+benchmark dataset|benchmark|evaluation
+ablation study|evaluation
+cross validation|cv|evaluation
+train test split|evaluation
+ground truth|evaluation
+confusion matrix|evaluation
+
+# Mathematics
+gradient descent|optimization
+stochastic gradient descent|sgd|optimization
+loss function|optimization
+objective function|optimization
+convex optimization|optimization
+dynamic programming|dp|theory
+markov chain|theory
+monte carlo|mc|theory
+bayesian inference|bayesian|theory
+maximum likelihood|ml|theory
+
+# Statistics
+statistical significance|statistics
+confidence interval|ci|statistics
+hypothesis test|statistics
+p value|p-value|statistics
+null hypothesis|statistics
+random variable|statistics
+probability distribution|statistics
+
+# Economics/Finance
+game theory|economics
+nash equilibrium|economics
+time series|economics
+regression analysis|statistics
+causal inference|economics
+portfolio optimization|finance
+risk management|finance
+market efficiency|finance
+
+# Systems
+distributed system|systems
+parallel computing|systems
+cloud computing|systems
+edge computing|systems
+data structure|theory
+operating system|os|systems
+
+# General Research
+proof of concept|poc|methodology
+empirical study|methodology
+case study|methodology
+real world application|methodology
+related work|methodology
+future work|methodology
