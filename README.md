@@ -61,8 +61,10 @@ Korel combines **two explainable paradigms** that complement each other:
 #### 2. Symbolic Reasoning (1980s Expert Systems)
 6. **Logical Inference Engine** - Pure Go rule engine for domain knowledge
    - Query expansion via `is_a`, `used_for`, `related_to` relations
+   - Multi-hop BFS expansion with 0.7× confidence decay per hop (pruned below 0.3)
    - Transitive reasoning: if `bert is_a transformer` and `transformer is_a neural-network`, then `bert is_a neural-network`
    - Explainable proof chains: shows exact logical steps
+   - Auto-populated from AutoTune: high-PMI pairs become `related_to` facts
    - Swappable interface: start simple, upgrade to full Prolog if needed
 
 **Example:**
@@ -270,19 +272,29 @@ The reusable Go library providing the core functionality:
 
 ```
 pkg/korel/
-├── korel.go              # Public API facade
-├── store/                # Storage interfaces & SQLite impl
+├── korel.go              # Public API facade (Ingest, Search, AutoTune, RebuildPipeline)
+├── store/                # Storage interface + implementations
+│   ├── store.go          #    - Interface: Store, StoplistView, DictView, TaxonomyView
+│   ├── memstore/         #    - In-memory impl (interned int32 keys, lazy adjacency)
+│   └── sqlite/           #    - SQLite impl (WAL, 13 tables incl. stoplist/dict/taxonomy)
 ├── ingest/               # Tokenization, multi-token, taxonomy
 ├── lexicon/              # Synonym normalization & c-token relationships
-├── analytics/            # Skip-gram analysis, PMI, statistics
-├── pmi/                  # Co-occurrence counting & PMI calc
-├── rank/                 # Hybrid scoring (PMI + cats + recency + authority + inference)
+├── analytics/            # Corpus analysis (parallel ProcessBatch, fused ComputeAll)
+├── pmi/                  # Co-occurrence counting & PMI/NPMI calc
+├── rank/                 # Hybrid scoring with density-based damping
 ├── cards/                # Card synthesis & explainability
 ├── query/                # Query parsing & retrieval
 ├── inference/            # Symbolic reasoning engine
 │   ├── inference.go      #    - Interface for swappable engines
-│   └── simple/           #    - Pure Go minimal rule engine
+│   └── simple/           #    - Pure Go engine (multi-hop BFS, confidence decay)
+├── signals/              # Density damping, collision detection, prediction error
 ├── stoplist/             # Self-adjusting stopword management
+├── autotune/             # Iterative stopword + rule discovery
+│   ├── stopwords/        #    - Stopword candidate detection
+│   ├── rules/            #    - PMI→rule auto-generation
+│   ├── entities/         #    - Entity extraction tuning
+│   └── taxonomy/         #    - Taxonomy refinement
+├── maintenance/          # Partial reindex, rule export
 └── config/               # Config loaders (YAML)
 ```
 
@@ -345,16 +357,18 @@ Low PMI → weak/random co-occurrence
 Unlike pure vector similarity, Korel ranks results using transparent weights:
 
 ```
-score = α·PMI + β·category_overlap + γ·recency + η·authority + θ·inference - δ·length_penalty
+score = α·PMI·damping + β·category_overlap + γ·recency + η·authority + θ·inference - δ·length_penalty
 ```
 
 Default weights (tunable):
-- α = 1.0 (PMI importance)
+- α = 1.0 (PMI importance, scaled by per-token damping factor)
 - β = 0.6 (category matching)
 - γ = 0.8 (recency, exponential decay)
 - η = 0.2 (link authority)
 - θ = 0.3 (symbolic inference strength)
 - δ = 0.05 (length normalization)
+
+Hub tokens that connect to many neighbors get density-based damping (smoothstep curve, floor 0.1) so they contribute less PMI signal — preventing generic terms from dominating results.
 
 ### Symbolic Reasoning
 
@@ -760,10 +774,18 @@ entities:
 
 ```bash
 # Run all tests
-go test ./pkg/...
+go test ./pkg/korel/... -timeout 300s
 
-# Test with sample data
-go test ./pkg/korel/pmi -v
+# TinyStories AutoTune benchmark (5k stories, ~7s)
+go test ./pkg/korel/ -run TinyStoriesAutoTune -v -timeout 120s
+
+# Full corpus benchmark (22k stories, ~38s)
+# Edit tinystories_test.go: set numStories = 0
+
+# Run specific packages
+go test ./pkg/korel/analytics/ -v
+go test ./pkg/korel/inference/simple/ -v
+go test ./pkg/korel/store/sqlite/ -v
 
 # Integration test (indexer → query)
 ./scripts/test_e2e.sh
@@ -771,20 +793,45 @@ go test ./pkg/korel/pmi -v
 
 ---
 
+## Performance
+
+Benchmarked on the TinyStories corpus (simple English narratives) using iterative AutoTune with density-based damping:
+
+| Corpus | Stories | Time | Semantic Hits | Noise | Rules Discovered |
+|--------|---------|------|---------------|-------|-----------------|
+| Subset | 5,000 | 6.8s | 6/10 | 0 | 84 |
+| Full | 21,989 | 37.5s | 10/10 | 0 | 144 |
+
+**Scaling:** Linear time, better-than-linear quality. At full corpus, PMI neighbors are richer (e.g., `ball → [kick, soccer, baseball, bat, golf, bounce, throw]`) and rule discovery improves 70% (e.g., `barber→haircut`, `cream→ice`, `needle→sew`, `kings→queens`).
+
+**AutoTune convergence:** 2 rounds regardless of corpus size. Discovered stopwords are stable across sizes (happy, saw, said — corpus-specific high-frequency low-information tokens beyond the 84 base stopwords).
+
+**Optimization history:**
+- Baseline (naive): 18.3s @ 5k stories
+- Token interning + fused iteration + parallel batch: 6.8s (63% faster)
+- Key techniques: integer pair keys (`[2]int32`), lazy adjacency index, fused `ComputeAll()` replacing 3 separate map iterations, parallel `ProcessBatch` with per-worker local counts
+
+---
+
 ## Roadmap
 
-### Phase 1: Core Library (Current)
+### Phase 1: Core Library
 - ✅ SQLite storage with WAL
 - ✅ Multi-token recognition
-- ✅ PMI calculation with ε-smoothing
+- ✅ PMI calculation with ε-smoothing (NPMI supported)
 - ✅ Hybrid scoring (PMI + categories + recency + authority + inference)
 - ✅ Card synthesis
-- ✅ **Symbolic inference engine** (pure Go, swappable interface)
+- ✅ Symbolic inference engine (pure Go, swappable interface)
 
 ### Phase 2: Self-Tuning
-- [ ] Automatic stopword candidate detection
+- ✅ Iterative AutoTune with automatic stopword detection
+- ✅ PMI→Rules auto-generation (high-PMI pairs become `related_to` facts)
+- ✅ AutoTune → Store persistence (stopwords + rules survive restarts)
+- ✅ RebuildPipeline reads back stoplist/dict/taxonomy from store
+- ✅ Density-based damping (hub tokens get reduced PMI influence)
+- ✅ Multi-hop inference (BFS expansion with confidence decay)
+- ✅ Full SQLite parity (stoplist, dict, taxonomy tables + views)
 - [ ] Taxonomy drift detection
-- [ ] **PMI→Rules auto-generation** (statistics suggest symbolic rules)
 - [ ] LLM-assisted synonym expansion
 
 ### Phase 3: Production
@@ -883,11 +930,12 @@ score = α·PMI + β·categories + γ·recency + η·authority + θ·inference -
 ```
 Every component is measurable, tunable, and explainable to auditors.
 
-### 4. **Self-Learning Rules** (Future)
-Vision: Use PMI statistics to auto-generate symbolic rules:
-- High PMI → `related_to(X, Y)` candidate
-- 80%+ co-occurrence → `requires(X, Y)` candidate
-- Human-in-loop validation → Add to rule base
+### 4. **Self-Learning Rules**
+AutoTune uses PMI statistics to auto-generate symbolic rules:
+- High PMI pairs with confidence ≥ 0.6 become `related_to(X, Y)` facts
+- Rules are persisted to store and fed into the inference engine via `AddFact`
+- Multi-hop expansion (BFS, 0.7× confidence decay per hop) makes discovered rules usable in query expansion
+- Example: corpus discovers `cream→ice`, `needle→sew`, `barber→haircut` without any manual rule writing
 
 **The Result:** A research platform demonstrating that pre-Transformer approaches, properly integrated, can solve modern enterprise AI challenges without GPU infrastructure or black-box reasoning.
 
