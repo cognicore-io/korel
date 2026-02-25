@@ -134,11 +134,12 @@ type Thresholds struct {
 	BootstrapEntropy   float64
 }
 
-// DefaultThresholds returns sensible default thresholds
+// DefaultThresholds returns sensible default thresholds.
+// PMIMax uses NPMI scale [-1,1] by default.
 func DefaultThresholds() Thresholds {
 	return Thresholds{
 		DFPercent:          80.0,
-		PMIMax:             0.1,
+		PMIMax:             0.15,
 		CatEntropy:         0.8,
 		BootstrapDFPercent: 60.0,
 		BootstrapEntropy:   0.4,

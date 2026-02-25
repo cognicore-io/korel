@@ -5,10 +5,16 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cognicore/korel/pkg/korel/analytics"
+	"github.com/cognicore/korel/pkg/korel/autotune/rules"
+	"github.com/cognicore/korel/pkg/korel/autotune/stopwords"
 	"github.com/cognicore/korel/pkg/korel/cards"
 	"github.com/cognicore/korel/pkg/korel/inference"
 	"github.com/cognicore/korel/pkg/korel/ingest"
+	"github.com/cognicore/korel/pkg/korel/pmi"
 	"github.com/cognicore/korel/pkg/korel/rank"
+	"github.com/cognicore/korel/pkg/korel/signals"
+	"github.com/cognicore/korel/pkg/korel/stoplist"
 	"github.com/cognicore/korel/pkg/korel/store"
 )
 
@@ -19,6 +25,7 @@ type Korel struct {
 	inf      inference.Engine
 	weights  ScoreWeights
 	halfLife float64
+	pmiCfg   pmi.Config
 }
 
 // ScoreWeights defines the weights for hybrid scoring
@@ -38,16 +45,22 @@ type Options struct {
 	Inference       inference.Engine
 	Weights         ScoreWeights
 	RecencyHalfLife float64
+	PMI             pmi.Config // PMI computation settings (default: pmi.DefaultConfig())
 }
 
 // New creates a Korel instance with the given dependencies
 func New(opts Options) *Korel {
+	cfg := opts.PMI
+	if cfg == (pmi.Config{}) {
+		cfg = pmi.DefaultConfig()
+	}
 	return &Korel{
 		store:    opts.Store,
 		pipeline: opts.Pipeline,
 		inf:      opts.Inference,
 		weights:  opts.Weights,
 		halfLife: opts.RecencyHalfLife,
+		pmiCfg:   cfg,
 	}
 }
 
@@ -114,10 +127,11 @@ func (k *Korel) Ingest(ctx context.Context, d IngestDoc) error {
 
 // SearchRequest defines a search query
 type SearchRequest struct {
-	Query string
-	Cats  []string
-	TopK  int
-	Now   time.Time
+	Query         string
+	Cats          []string
+	TopK          int
+	Now           time.Time
+	EnableSignals bool // opt-in: compute Daimon-inspired self-monitoring signals
 }
 
 // Card represents a structured, explainable result
@@ -153,9 +167,34 @@ type InferencePath struct {
 	Steps []string
 }
 
+// SearchSignals contains self-monitoring signals computed during retrieval.
+// Inspired by Daimon's cognitive architecture (Brian Jones).
+type SearchSignals struct {
+	// Collisions are concept pairs with high individual PMI but low joint PMI.
+	// These are "thought collisions" — the query brought together concepts
+	// the corpus hasn't connected. Potential discovery signal.
+	Collisions []signals.Collision
+
+	// PredictionError measures how much the retrieval results diverge from
+	// what PMI statistics predicted. High score = surprising results.
+	PredictionError signals.PredictionError
+
+	// TokenDamping shows density-based damping for each query token.
+	// Hub tokens that connect to too many concepts get dampened.
+	TokenDamping []signals.TokenDensity
+}
+
 // SearchResponse contains search results
 type SearchResponse struct {
-	Cards []Card
+	Cards   []Card
+	Signals *SearchSignals // non-nil only when SearchRequest.EnableSignals is true
+}
+
+// scored is a document with its computed score breakdown.
+type scored struct {
+	doc        store.Doc
+	breakdown  rank.ScoreBreakdown
+	totalScore float64
 }
 
 // Search executes a query and returns structured cards
@@ -204,12 +243,6 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 		return val
 	}
 
-	type scored struct {
-		doc        store.Doc
-		breakdown  rank.ScoreBreakdown
-		totalScore float64
-	}
-
 	scoredDocs := make([]scored, 0, len(docs))
 	now := req.Now
 	if now.IsZero() {
@@ -256,7 +289,82 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 		response.Cards = append(response.Cards, convertCard(card, expanded))
 	}
 
+	// Compute self-monitoring signals (Daimon-inspired)
+	if req.EnableSignals {
+		response.Signals = k.computeSignals(ctx, processed.Tokens, scoredDocs)
+	}
+
 	return response, nil
+}
+
+// computeSignals runs the three Daimon-inspired signal detectors on the search results.
+func (k *Korel) computeSignals(ctx context.Context, queryTokens []string, scoredDocs []scored) *SearchSignals {
+	// Shared adapter: converts store.TopNeighbors to signals.NeighborPMI
+	topNeighborsFunc := func(c context.Context, token string, n int) ([]signals.NeighborPMI, error) {
+		neighbors, err := k.store.TopNeighbors(c, token, n)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]signals.NeighborPMI, len(neighbors))
+		for i, nb := range neighbors {
+			result[i] = signals.NeighborPMI{Token: nb.Token, PMI: nb.PMI}
+		}
+		return result, nil
+	}
+
+	sig := &SearchSignals{}
+
+	// 1. Collision detection
+	pmiLookup := &signals.StorePMILookup{
+		Ctx:              ctx,
+		GetPMI:           k.store.GetPMI,
+		TopNeighborsFunc: topNeighborsFunc,
+	}
+	sig.Collisions = signals.DetectCollisions(queryTokens, pmiLookup, signals.DefaultCollisionConfig())
+
+	// 2. Prediction error
+	resultTokens := collectResultTokens(scoredDocs)
+	neighborProvider := &signals.StoreNeighborProvider{
+		Ctx:              ctx,
+		TopNeighborsFunc: topNeighborsFunc,
+	}
+	sig.PredictionError = signals.ComputePredictionError(
+		queryTokens, resultTokens, neighborProvider, signals.DefaultPredictionConfig(),
+	)
+
+	// 3. Density-based damping (uses TopNeighbors to count connections)
+	densityProvider := &signals.StoreDensityProvider{
+		Ctx:              ctx,
+		TopNeighborsFunc: topNeighborsFunc,
+		VocabSizeFunc: func(c context.Context) int {
+			// Approximate vocab size from retrieved docs
+			seen := make(map[string]struct{})
+			for _, sd := range scoredDocs {
+				for _, tok := range sd.doc.Tokens {
+					seen[tok] = struct{}{}
+				}
+			}
+			return len(seen)
+		},
+	}
+	sig.TokenDamping = signals.ComputeDampingBatch(queryTokens, densityProvider, signals.DefaultDampingConfig())
+
+	return sig
+}
+
+// collectResultTokens extracts unique tokens from all scored documents.
+func collectResultTokens(docs []scored) []string {
+	seen := make(map[string]struct{})
+	for _, sd := range docs {
+		for _, tok := range sd.doc.Tokens {
+			seen[tok] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for tok := range seen {
+		result = append(result, tok)
+	}
+	return result
 }
 
 func convertCard(c cards.Card, expanded []string) Card {
@@ -301,6 +409,201 @@ func uniqueStrings(in []string) []string {
 	return out
 }
 
+// AutoTuneResult contains suggestions from corpus analysis.
+type AutoTuneResult struct {
+	StopwordCandidates []stoplist.Candidate // cumulative from all iterations
+	RuleSuggestions    []rules.Suggestion   // from final iteration stats
+	Iterations         []AutoTuneIteration  // per-round details
+}
+
+// AutoTuneIteration tracks one round of iterative autotune.
+type AutoTuneIteration struct {
+	Round         int
+	NewStopwords  []string
+	TotalStopwords int
+}
+
+// AutoTuneOptions configures the iterative autotune process.
+type AutoTuneOptions struct {
+	BaseStopwords  []string              // initial stopwords (from current pipeline)
+	MaxIterations  int                   // max rounds (default: 3)
+	Thresholds     stoplist.Thresholds   // stopword detection thresholds (default: AutoTuneDefaults())
+	DisableDamping bool                  // set true to skip density-based damping (default: false = damping ON)
+	DampingConfig  signals.DampingConfig // damping curve parameters (default: signals.DefaultDampingConfig())
+}
+
+// AutoTuneDefaults returns stoplist thresholds tuned for iterative autotune with NPMI.
+// More relaxed than stoplist.DefaultThresholds() which targets news corpora.
+func AutoTuneDefaults() stoplist.Thresholds {
+	return stoplist.Thresholds{
+		DFPercent:          50.0,
+		PMIMax:             0.3,
+		CatEntropy:         0.8,
+		BootstrapDFPercent: 40.0,
+		BootstrapEntropy:   0.4,
+	}
+}
+
+// AutoTune performs iterative corpus analysis to discover stopwords and rules.
+// Each round: tokenize with current stopwords → analyze stats → discover new
+// stopwords → add them → repeat until convergence or MaxIterations.
+func (k *Korel) AutoTune(ctx context.Context, texts []string, opts *AutoTuneOptions) (AutoTuneResult, error) {
+	maxIter := 3
+	var baseThresholds stoplist.Thresholds
+	var currentStopwords []string
+	enableDamping := true
+	dampingCfg := signals.DefaultDampingConfig()
+	if opts != nil {
+		if opts.MaxIterations > 0 {
+			maxIter = opts.MaxIterations
+		}
+		baseThresholds = opts.Thresholds
+		currentStopwords = append(currentStopwords, opts.BaseStopwords...)
+		if opts.DampingConfig != (signals.DampingConfig{}) {
+			dampingCfg = opts.DampingConfig
+		}
+		enableDamping = !opts.DisableDamping
+	}
+	if baseThresholds == (stoplist.Thresholds{}) {
+		baseThresholds = AutoTuneDefaults()
+	}
+
+	stopSet := make(map[string]struct{}, len(currentStopwords))
+	for _, s := range currentStopwords {
+		stopSet[s] = struct{}{}
+	}
+
+	var result AutoTuneResult
+	var finalStats analytics.Stats
+
+	// Build and process once. Subsequent rounds prune newly-discovered stopwords
+	// instead of re-processing all texts from scratch.
+	pipeline := ingest.NewPipeline(
+		ingest.NewTokenizer(currentStopwords),
+		ingest.NewMultiTokenParser([]ingest.DictEntry{}),
+		ingest.NewTaxonomy(),
+	)
+	analyzer := analytics.NewAnalyzer(k.pmiCfg)
+	if enableDamping {
+		analyzer.WithDamping(dampingCfg)
+	}
+
+	// Pre-tokenize all texts, then batch-process in parallel.
+	docs := make([]analytics.DocTokens, len(texts))
+	for i, text := range texts {
+		processed := pipeline.Process(text)
+		docs[i] = analytics.DocTokens{
+			Tokens:     processed.Tokens,
+			Categories: processed.Categories,
+		}
+	}
+	analyzer.ProcessBatch(docs)
+
+	for round := 0; round < maxIter; round++ {
+		roundStats := analyzer.SnapshotView()
+
+		// Detect whether corpus has categories.
+		hasCats := false
+		for _, cats := range roundStats.TokenCats {
+			if len(cats) > 0 {
+				hasCats = true
+				break
+			}
+		}
+
+		thresholds := baseThresholds
+		if !hasCats {
+			thresholds.CatEntropy = -1
+		}
+
+		// Fused computation: single pair iteration for both stopword stats and high PMI pairs.
+		computed := roundStats.ComputeAll()
+
+		// Discover stopword candidates using pre-computed stats.
+		stopTuner := stopwords.AutoTuner{
+			Provider:   &precomputedStopProvider{stats: computed.StopwordStats},
+			Manager:    stoplist.NewManager(nil),
+			Thresholds: thresholds,
+		}
+		candidates, err := stopTuner.Run(ctx)
+		if err != nil {
+			return result, err
+		}
+
+		// Filter to only genuinely new stopwords.
+		var newStops []string
+		for _, c := range candidates {
+			if _, exists := stopSet[c.Token]; !exists {
+				newStops = append(newStops, c.Token)
+				stopSet[c.Token] = struct{}{}
+				result.StopwordCandidates = append(result.StopwordCandidates, c)
+			}
+		}
+
+		result.Iterations = append(result.Iterations, AutoTuneIteration{
+			Round:          round + 1,
+			NewStopwords:   newStops,
+			TotalStopwords: len(stopSet),
+		})
+
+		if len(newStops) == 0 {
+			break // converged
+		}
+
+		// Prune discovered stopwords from the analyzer instead of rebuilding.
+		analyzer.RemoveTokens(newStops)
+		currentStopwords = append(currentStopwords, newStops...)
+	}
+
+	finalStats = analyzer.Snapshot()
+
+	// Rule suggestions from final iteration stats (fused computation).
+	finalComputed := finalStats.ComputeAll()
+	ruleTuner := rules.AutoTuner{
+		Provider: &precomputedRuleProvider{pairs: finalComputed.HighPMIPairs},
+	}
+	suggestions, err := ruleTuner.Run(ctx)
+	if err != nil {
+		return result, err
+	}
+	result.RuleSuggestions = suggestions
+
+	return result, nil
+}
+
+// precomputedStopProvider implements stopwords.StatsProvider with pre-computed data.
+type precomputedStopProvider struct {
+	stats []stoplist.Stats
+}
+
+func (p *precomputedStopProvider) StopwordStats(ctx context.Context) ([]stoplist.Stats, error) {
+	return p.stats, nil
+}
+
+// precomputedRuleProvider implements rules.StatsProvider with pre-computed data.
+type precomputedRuleProvider struct {
+	pairs []analytics.HighPMIPair
+}
+
+func (p *precomputedRuleProvider) HighPMIPairs(ctx context.Context) ([]rules.PairStats, error) {
+	out := make([]rules.PairStats, len(p.pairs))
+	for i, hp := range p.pairs {
+		out[i] = rules.PairStats{
+			Subject: hp.A,
+			Object:  hp.B,
+			PMI:     hp.PMI,
+			Support: hp.Support,
+		}
+	}
+	return out, nil
+}
+
+// batchPairStore is an optional interface for stores that support batch pair operations.
+type batchPairStore interface {
+	BatchIncPairs(pairs [][2]string)
+	BatchDecPairs(pairs [][2]string)
+}
+
 func (k *Korel) updateStats(ctx context.Context, tokens []string, delta int) error {
 	if delta == 0 {
 		return nil
@@ -324,13 +627,28 @@ func (k *Korel) updateStats(ctx context.Context, tokens []string, delta int) err
 		}
 	}
 
-	for i := 0; i < len(unique); i++ {
-		for j := i + 1; j < len(unique); j++ {
+	// Collect all pairs, then batch-write under a single lock if supported.
+	n := len(unique)
+	pairs := make([][2]string, 0, n*(n-1)/2)
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			pairs = append(pairs, [2]string{unique[i], unique[j]})
+		}
+	}
+
+	if bs, ok := k.store.(batchPairStore); ok {
+		if delta > 0 {
+			bs.BatchIncPairs(pairs)
+		} else {
+			bs.BatchDecPairs(pairs)
+		}
+	} else {
+		for _, p := range pairs {
 			var err error
 			if delta > 0 {
-				err = k.store.IncPair(ctx, unique[i], unique[j])
-			} else if delta < 0 {
-				err = k.store.DecPair(ctx, unique[i], unique[j])
+				err = k.store.IncPair(ctx, p[0], p[1])
+			} else {
+				err = k.store.DecPair(ctx, p[0], p[1])
 			}
 			if err != nil {
 				return err

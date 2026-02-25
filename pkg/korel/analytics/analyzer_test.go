@@ -2,7 +2,10 @@ package analytics
 
 import (
 	"context"
+	"math"
 	"testing"
+
+	"github.com/cognicore/korel/pkg/korel/signals"
 )
 
 func TestAnalyzerStopwordStats(t *testing.T) {
@@ -89,28 +92,29 @@ func TestAnalyzerBigramVsDocumentPairs(t *testing.T) {
 	stats := a.Snapshot()
 
 	// Check bigram counts (adjacent pairs)
-	expectedBigrams := map[pair]int64{
-		{A: "deep", B: "learning"}:  1,
-		{A: "learning", B: "models"}: 1,
-		{A: "models", B: "use"}:      1,
-		{A: "use", B: "deep"}:        1,
-		{A: "deep", B: "neural"}:     1,
-		{A: "neural", B: "networks"}:  1,
+	type bigramCase struct {
+		a, b  string
+		count int64
+	}
+	expectedBigrams := []bigramCase{
+		{"deep", "learning", 1},
+		{"learning", "models", 1},
+		{"models", "use", 1},
+		{"use", "deep", 1},
+		{"deep", "neural", 1},
+		{"neural", "networks", 1},
 	}
 
-	for p, expectedCount := range expectedBigrams {
-		if stats.BigramCounts[p] != expectedCount {
-			t.Errorf("Bigram (%s,%s): got count %d, want %d", p.A, p.B, stats.BigramCounts[p], expectedCount)
+	for _, tc := range expectedBigrams {
+		if got := stats.BigramCount(tc.a, tc.b); got != tc.count {
+			t.Errorf("Bigram (%s,%s): got count %d, want %d", tc.a, tc.b, got, tc.count)
 		}
 	}
 
 	// Check document pair counts (all unique token combinations)
-	// Should have (deep,learning), (deep,models), (deep,use), (deep,neural), (deep,networks),
-	// (learning,models), (learning,use), etc.
 	// "deep" appears twice, but only counted once in document pairs
-	deepLearningPair := newPair("deep", "learning")
-	if stats.PairCounts[deepLearningPair] != 1 {
-		t.Errorf("Document pair (deep,learning): got count %d, want 1", stats.PairCounts[deepLearningPair])
+	if got := stats.PairCount("deep", "learning"); got != 1 {
+		t.Errorf("Document pair (deep,learning): got count %d, want 1", got)
 	}
 
 	// Verify we have more document pairs than bigrams (since document pairs are all combinations)
@@ -153,15 +157,13 @@ func TestAnalyzerSkipGramDeduplication(t *testing.T) {
 	stats := a.Snapshot()
 
 	// (transformer, attention) should be counted once, not twice
-	pair := newPair("transformer", "attention")
-	if stats.SkipGramCounts[pair] != 1 {
-		t.Errorf("Skip-gram (transformer, attention) count = %d, want 1 (should be deduplicated per document)", stats.SkipGramCounts[pair])
+	if got := stats.SkipGramCount("transformer", "attention"); got != 1 {
+		t.Errorf("Skip-gram (transformer, attention) count = %d, want 1 (should be deduplicated per document)", got)
 	}
 
 	// (transformer, model) should also be counted once
-	pair2 := newPair("transformer", "model")
-	if stats.SkipGramCounts[pair2] != 1 {
-		t.Errorf("Skip-gram (transformer, model) count = %d, want 1", stats.SkipGramCounts[pair2])
+	if got := stats.SkipGramCount("transformer", "model"); got != 1 {
+		t.Errorf("Skip-gram (transformer, model) count = %d, want 1", got)
 	}
 }
 
@@ -180,32 +182,24 @@ func TestAnalyzerSkipGramWindow(t *testing.T) {
 	stats := a.Snapshot()
 
 	// Should be in window
-	shouldExist := []pair{
-		newPair("a", "b"),
-		newPair("a", "c"),
-		newPair("b", "c"),
-		newPair("b", "d"),
-		newPair("c", "d"),
-		newPair("c", "e"),
-		newPair("d", "e"),
+	type sgCase struct{ a, b string }
+	shouldExist := []sgCase{
+		{"a", "b"}, {"a", "c"}, {"b", "c"}, {"b", "d"},
+		{"c", "d"}, {"c", "e"}, {"d", "e"},
 	}
 
-	for _, p := range shouldExist {
-		if stats.SkipGramCounts[p] != 1 {
-			t.Errorf("Skip-gram (%s, %s) should exist in window=3, got count %d", p.A, p.B, stats.SkipGramCounts[p])
+	for _, tc := range shouldExist {
+		if got := stats.SkipGramCount(tc.a, tc.b); got != 1 {
+			t.Errorf("Skip-gram (%s, %s) should exist in window=3, got count %d", tc.a, tc.b, got)
 		}
 	}
 
 	// Should NOT be in window
-	shouldNotExist := []pair{
-		newPair("a", "d"),
-		newPair("a", "e"),
-		newPair("b", "e"),
-	}
+	shouldNotExist := []sgCase{{"a", "d"}, {"a", "e"}, {"b", "e"}}
 
-	for _, p := range shouldNotExist {
-		if stats.SkipGramCounts[p] != 0 {
-			t.Errorf("Skip-gram (%s, %s) should NOT exist (outside window=3), got count %d", p.A, p.B, stats.SkipGramCounts[p])
+	for _, tc := range shouldNotExist {
+		if got := stats.SkipGramCount(tc.a, tc.b); got != 0 {
+			t.Errorf("Skip-gram (%s, %s) should NOT exist (outside window=3), got count %d", tc.a, tc.b, got)
 		}
 	}
 }
@@ -271,5 +265,210 @@ func TestAnalyzerCTokenPairsSorted(t *testing.T) {
 			t.Errorf("C-token pairs should be sorted by PMI descending, but pairs[%d].PMI=%.2f < pairs[%d].PMI=%.2f",
 				i, pairs[i].PMI, i+1, pairs[i+1].PMI)
 		}
+	}
+}
+
+// --- Damping tests ---
+
+// buildDampingCorpus creates a corpus where "hub" co-occurs with many tokens
+// (high density) while "rare_a"/"rare_b" only co-occur with each other (low density).
+// This lets us verify that damping reduces hub PMI but leaves rare-pair PMI untouched.
+func buildDampingCorpus() *Analyzer {
+	a := NewAnalyzer()
+
+	// "hub" appears in 20 docs, co-occurring with 20 distinct tokens.
+	// This gives hub a high connection density.
+	for i := 0; i < 20; i++ {
+		other := []string{
+			"alpha", "bravo", "charlie", "delta", "echo",
+			"foxtrot", "golf", "hotel", "india", "juliet",
+			"kilo", "lima", "mike", "november", "oscar",
+			"papa", "quebec", "romeo", "sierra", "tango",
+		}[i]
+		a.Process([]string{"hub", other}, nil)
+	}
+
+	// "rare_a" and "rare_b" only appear together — strong exclusive pair.
+	for i := 0; i < 10; i++ {
+		a.Process([]string{"rare_a", "rare_b"}, nil)
+	}
+
+	// Some filler docs so vocab is big enough for density ratios to matter.
+	fillers := []string{"x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10"}
+	for _, f := range fillers {
+		a.Process([]string{f}, nil)
+	}
+
+	return a
+}
+
+func TestDampingFactor_NoDampingByDefault(t *testing.T) {
+	a := buildDampingCorpus()
+	stats := a.Snapshot()
+
+	// Without damping configured, all factors should be 1.0.
+	f := stats.dampingFactor("hub")
+	if f != 1.0 {
+		t.Errorf("expected dampingFactor=1.0 without damping config, got %.3f", f)
+	}
+	f = stats.dampingFactor("rare_a")
+	if f != 1.0 {
+		t.Errorf("expected dampingFactor=1.0 for rare_a without damping config, got %.3f", f)
+	}
+}
+
+func TestDampingFactor_HubGetsDamped(t *testing.T) {
+	a := buildDampingCorpus()
+	a.WithDamping(signals.DefaultDampingConfig())
+	stats := a.Snapshot()
+
+	hubFactor := stats.dampingFactor("hub")
+	rareFactor := stats.dampingFactor("rare_a")
+
+	t.Logf("hub dampingFactor=%.3f, rare_a dampingFactor=%.3f", hubFactor, rareFactor)
+
+	// Hub connects to 20 out of ~32 tokens (density ~0.63) — should be dampened.
+	if hubFactor >= 1.0 {
+		t.Errorf("hub should be dampened (factor < 1.0), got %.3f", hubFactor)
+	}
+
+	// Rare pair connects to 1 token (density ~0.03) — should NOT be dampened.
+	if rareFactor != 1.0 {
+		t.Errorf("rare_a should not be dampened (factor = 1.0), got %.3f", rareFactor)
+	}
+
+	// Hub should be more dampened than rare.
+	if hubFactor >= rareFactor {
+		t.Errorf("hub (%.3f) should have lower damping factor than rare_a (%.3f)", hubFactor, rareFactor)
+	}
+}
+
+func TestDampingFactor_CustomConfig(t *testing.T) {
+	a := buildDampingCorpus()
+	// Very aggressive damping: anything above 10% density gets dampened.
+	a.WithDamping(signals.DampingConfig{
+		PMIThreshold: 0.01,
+		LowDensity:   0.1,
+		HighDensity:  0.3,
+		MinFactor:    0.05,
+	})
+	stats := a.Snapshot()
+
+	hubFactor := stats.dampingFactor("hub")
+	t.Logf("hub dampingFactor with aggressive config: %.3f", hubFactor)
+
+	// With aggressive settings, hub should be heavily dampened.
+	if hubFactor > 0.2 {
+		t.Errorf("expected hub dampingFactor < 0.2 with aggressive config, got %.3f", hubFactor)
+	}
+}
+
+func TestStopwordStats_DampingReducesHubPMIMax(t *testing.T) {
+	corpus := buildDampingCorpus()
+
+	// Get undamped stats.
+	undampedStats := corpus.Snapshot()
+	undampedSW := undampedStats.StopwordStats()
+	undampedPMI := make(map[string]float64)
+	for _, sw := range undampedSW {
+		undampedPMI[sw.Token] = sw.PMIMax
+	}
+
+	// Get damped stats from a fresh corpus.
+	corpus2 := buildDampingCorpus()
+	corpus2.WithDamping(signals.DefaultDampingConfig())
+	dampedStats := corpus2.Snapshot()
+	dampedSW := dampedStats.StopwordStats()
+	dampedPMI := make(map[string]float64)
+	for _, sw := range dampedSW {
+		dampedPMI[sw.Token] = sw.PMIMax
+	}
+
+	t.Logf("hub: undamped PMIMax=%.3f, damped PMIMax=%.3f", undampedPMI["hub"], dampedPMI["hub"])
+	t.Logf("rare_a: undamped PMIMax=%.3f, damped PMIMax=%.3f", undampedPMI["rare_a"], dampedPMI["rare_a"])
+
+	// Hub's PMIMax should be reduced by damping.
+	if dampedPMI["hub"] >= undampedPMI["hub"] {
+		t.Errorf("damping should reduce hub PMIMax: undamped=%.3f, damped=%.3f",
+			undampedPMI["hub"], dampedPMI["hub"])
+	}
+
+	// Rare pair's PMIMax should be unchanged (dampingFactor=1.0 for both tokens).
+	if math.Abs(dampedPMI["rare_a"]-undampedPMI["rare_a"]) > 0.001 {
+		t.Errorf("damping should not affect rare_a PMIMax: undamped=%.3f, damped=%.3f",
+			undampedPMI["rare_a"], dampedPMI["rare_a"])
+	}
+}
+
+func TestHighPMIPairs_DampingReducesHubScores(t *testing.T) {
+	corpus := buildDampingCorpus()
+
+	// Undamped.
+	undampedStats := corpus.Snapshot()
+	undampedPairs := undampedStats.HighPMIPairs()
+	undampedByPair := make(map[string]float64)
+	for _, p := range undampedPairs {
+		undampedByPair[p.A+"|"+p.B] = p.PMI
+	}
+
+	// Damped.
+	corpus2 := buildDampingCorpus()
+	corpus2.WithDamping(signals.DefaultDampingConfig())
+	dampedStats := corpus2.Snapshot()
+	dampedPairs := dampedStats.HighPMIPairs()
+	dampedByPair := make(map[string]float64)
+	for _, p := range dampedPairs {
+		dampedByPair[p.A+"|"+p.B] = p.PMI
+	}
+
+	// Pairs involving "hub" should have reduced PMI.
+	hubReduced := false
+	for key, undampedPMI := range undampedByPair {
+		dampedPMI := dampedByPair[key]
+		if dampedPMI < undampedPMI {
+			// At least one hub pair was reduced.
+			if key[:3] == "hub" || key[len(key)-3:] == "hub" {
+				hubReduced = true
+			}
+		}
+	}
+	if !hubReduced {
+		t.Error("expected at least one hub pair to have reduced PMI from damping")
+	}
+
+	// Rare pair should be unchanged.
+	rareKey := "rare_a|rare_b"
+	if _, ok := undampedByPair[rareKey]; !ok {
+		rareKey = "rare_b|rare_a" // pair may be sorted differently
+	}
+	if math.Abs(dampedByPair[rareKey]-undampedByPair[rareKey]) > 0.001 {
+		t.Errorf("rare pair PMI should be unchanged: undamped=%.3f, damped=%.3f",
+			undampedByPair[rareKey], dampedByPair[rareKey])
+	}
+}
+
+func TestDampingCache_ComputedOnce(t *testing.T) {
+	a := buildDampingCorpus()
+	a.WithDamping(signals.DefaultDampingConfig())
+	stats := a.Snapshot()
+
+	// First call builds cache.
+	f1 := stats.dampingFactor("hub")
+	// Second call should return same value (cache hit).
+	f2 := stats.dampingFactor("hub")
+	if f1 != f2 {
+		t.Errorf("dampingFactor should be deterministic: first=%.3f, second=%.3f", f1, f2)
+	}
+}
+
+func TestDampingFactor_UnknownToken(t *testing.T) {
+	a := buildDampingCorpus()
+	a.WithDamping(signals.DefaultDampingConfig())
+	stats := a.Snapshot()
+
+	// Token not in corpus should get 1.0 (no damping).
+	f := stats.dampingFactor("nonexistent")
+	if f != 1.0 {
+		t.Errorf("unknown token should get dampingFactor=1.0, got %.3f", f)
 	}
 }

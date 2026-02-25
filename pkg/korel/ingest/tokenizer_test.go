@@ -232,14 +232,15 @@ func TestTokenizerMixedPunctuation(t *testing.T) {
 	}
 }
 
-func TestTokenizerNumbersKept(t *testing.T) {
+func TestTokenizerNumbersFiltered(t *testing.T) {
 	tokenizer := NewTokenizer([]string{})
 
 	text := "machine learning 2023 gpt-4 utf-8"
 	tokens := tokenizer.Tokenize(text)
 
-	// Numbers should be KEPT (they're semantically meaningful: years, versions, etc.)
-	want := []string{"machine", "learning", "2023", "gpt-4", "utf-8"}
+	// Pure-numeric tokens are filtered (low semantic value).
+	// Mixed tokens like "gpt-4", "utf-8" are kept.
+	want := []string{"machine", "learning", "gpt-4", "utf-8"}
 	if !equalTokens(tokens, want) {
 		t.Errorf("Tokenize(%q) = %v, want %v", text, tokens, want)
 	}

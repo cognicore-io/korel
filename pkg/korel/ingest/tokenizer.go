@@ -68,6 +68,12 @@ func (t *Tokenizer) processToken(token string) string {
 		return ""
 	}
 
+	// Step 1b: Filter pure-numeric tokens (low semantic value).
+	// Mixed tokens like "gpt-4", "utf-8", "python3" are kept.
+	if isNumericOnly(word) {
+		return ""
+	}
+
 	// Step 2: Normalize via lexicon (if available)
 	if t.lexicon != nil {
 		word = t.lexicon.Normalize(word)
@@ -92,6 +98,16 @@ func (t *Tokenizer) cleanToken(token string) string {
 	}
 
 	return token
+}
+
+// isNumericOnly returns true if the token contains only digits and hyphens.
+func isNumericOnly(s string) bool {
+	for _, r := range s {
+		if !unicode.IsDigit(r) && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func (t *Tokenizer) isStopword(word string) bool {

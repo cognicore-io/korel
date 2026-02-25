@@ -354,6 +354,14 @@ func TestSQLiteIntegrationTopNeighbors(t *testing.T) {
 	}
 	defer st.Close()
 
+	// Insert enough docs so totalDocs > 0 (needed for PMI computation).
+	for i := 0; i < 20; i++ {
+		st.UpsertDoc(ctx, store.Doc{
+			URL:   fmt.Sprintf("http://test/%d", i),
+			Title: fmt.Sprintf("doc %d", i),
+		})
+	}
+
 	// Set up token frequencies
 	st.UpsertTokenDF(ctx, "machine", 10)
 	st.UpsertTokenDF(ctx, "learning", 8)

@@ -2,6 +2,23 @@ package pmi
 
 import "math"
 
+// Config controls PMI computation across the system.
+type Config struct {
+	Epsilon float64 // Laplace smoothing constant (default: 1.0)
+	MinDF   int64   // Minimum document frequency for neighbor candidates (default: 5)
+	UseNPMI bool    // Use normalized PMI [-1,1] instead of raw PMI (default: true)
+}
+
+// DefaultConfig returns the default PMI configuration.
+// NPMI is enabled by default for better normalization across different corpus sizes.
+func DefaultConfig() Config {
+	return Config{
+		Epsilon: 1.0,
+		MinDF:   5,
+		UseNPMI: true,
+	}
+}
+
 // Calculator handles PMI (Pointwise Mutual Information) calculations
 type Calculator struct {
 	epsilon float64 // smoothing constant
@@ -13,6 +30,23 @@ func NewCalculator(epsilon float64) *Calculator {
 		epsilon = 1.0
 	}
 	return &Calculator{epsilon: epsilon}
+}
+
+// NewCalculatorFromConfig creates a Calculator from a Config.
+func NewCalculatorFromConfig(cfg Config) *Calculator {
+	eps := cfg.Epsilon
+	if eps <= 0 {
+		eps = DefaultConfig().Epsilon
+	}
+	return NewCalculator(eps)
+}
+
+// Score computes PMI or NPMI based on the useNPMI flag.
+func (c *Calculator) Score(nAB, nA, nB, N int64, useNPMI bool) float64 {
+	if useNPMI {
+		return c.NPMI(nAB, nA, nB, N)
+	}
+	return c.PMI(nAB, nA, nB, N)
 }
 
 // PMI calculates the pointwise mutual information between two tokens

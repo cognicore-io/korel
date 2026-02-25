@@ -184,10 +184,10 @@ func TestParserSpecialCharacters(t *testing.T) {
 
 	query := qp.Parse("hello@world.com test#tag C++ python3.9")
 
-	// Should filter out special characters
+	// Should filter out special characters (letters, digits, and hyphens are allowed)
 	for _, tok := range query.Tokens {
 		for _, r := range tok {
-			if !((r >= 'a' && r <= 'z') || r == '-') {
+			if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-') {
 				t.Errorf("Token %s contains special characters", tok)
 			}
 		}

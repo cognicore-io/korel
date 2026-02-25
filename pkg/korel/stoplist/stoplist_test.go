@@ -114,8 +114,8 @@ func TestDefaultThresholds(t *testing.T) {
 	if thresh.DFPercent != 80.0 {
 		t.Error("Default DF threshold should be 80%")
 	}
-	if thresh.PMIMax != 0.1 {
-		t.Error("Default PMI threshold should be 0.1")
+	if thresh.PMIMax != 0.15 {
+		t.Error("Default PMI threshold should be 0.15 (NPMI scale)")
 	}
 	if thresh.CatEntropy != 0.8 {
 		t.Error("Default entropy threshold should be 0.8")

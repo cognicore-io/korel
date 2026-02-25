@@ -5,22 +5,32 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math"
+	"sort"
 	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
 
+	"github.com/cognicore/korel/pkg/korel/pmi"
 	"github.com/cognicore/korel/pkg/korel/store"
 )
 
 // sqliteStore implements the Store interface using SQLite
 type sqliteStore struct {
-	db *sql.DB
+	db     *sql.DB
+	pmiCfg pmi.Config
+	calc   *pmi.Calculator
 }
 
-// OpenSQLite opens a SQLite database with WAL mode enabled
-func OpenSQLite(ctx context.Context, path string) (store.Store, error) {
+// OpenSQLite opens a SQLite database with WAL mode enabled.
+// An optional pmi.Config can be passed to control PMI computation;
+// if omitted, pmi.DefaultConfig() is used.
+func OpenSQLite(ctx context.Context, path string, cfg ...pmi.Config) (store.Store, error) {
+	c := pmi.DefaultConfig()
+	if len(cfg) > 0 {
+		c = cfg[0]
+	}
+
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
@@ -44,7 +54,11 @@ func OpenSQLite(ctx context.Context, path string) (store.Store, error) {
 		return nil, err
 	}
 
-	return &sqliteStore{db: db}, nil
+	return &sqliteStore{
+		db:     db,
+		pmiCfg: c,
+		calc:   pmi.NewCalculatorFromConfig(c),
+	}, nil
 }
 
 // Close closes the database connection
@@ -392,20 +406,24 @@ func (s *sqliteStore) GetPMI(ctx context.Context, t1, t2 string) (float64, bool,
 		return 0, false, nil
 	}
 
-	epsilon := 1.0
-	numerator := (float64(co) + epsilon) * float64(total)
-	denominator := (float64(dfA) + epsilon) * (float64(dfB) + epsilon)
-	if denominator == 0 {
-		return 0, false, nil
-	}
-
-	return math.Log(numerator / denominator), true, nil
+	score := s.calc.Score(co, dfA, dfB, total, s.pmiCfg.UseNPMI)
+	return score, true, nil
 }
 
-// TopNeighbors returns the top K neighbors by PMI for a token
+// TopNeighbors returns the top K neighbors ranked by PMI score for a token.
 func (s *sqliteStore) TopNeighbors(ctx context.Context, token string, k int) ([]store.Neighbor, error) {
 	if k <= 0 {
 		k = 10
+	}
+
+	total, err := s.totalDocs(ctx)
+	if err != nil || total == 0 {
+		return nil, err
+	}
+
+	dfToken, err := s.GetTokenDF(ctx, token)
+	if err != nil || dfToken == 0 {
+		return nil, err
 	}
 
 	rows, err := s.db.QueryContext(ctx, `
@@ -413,24 +431,47 @@ SELECT
 	CASE WHEN t1 = ? THEN t2 ELSE t1 END AS neighbor,
 	count
 FROM token_pairs
-WHERE t1 = ? OR t2 = ?
-ORDER BY count DESC
-LIMIT ?;
-`, token, token, token, k)
+WHERE t1 = ? OR t2 = ?;
+`, token, token, token)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var neighbors []store.Neighbor
+	type raw struct {
+		token string
+		count int64
+	}
+	var pairs []raw
 	for rows.Next() {
-		var neighbor store.Neighbor
-		if err := rows.Scan(&neighbor.Token, &neighbor.PMI); err != nil {
+		var r raw
+		if err := rows.Scan(&r.token, &r.count); err != nil {
 			return nil, err
 		}
-		neighbors = append(neighbors, neighbor)
+		pairs = append(pairs, r)
 	}
-	return neighbors, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Compute PMI/NPMI for each neighbor and collect into result.
+	var neighbors []store.Neighbor
+	for _, r := range pairs {
+		dfOther, err := s.GetTokenDF(ctx, r.token)
+		if err != nil || dfOther < s.pmiCfg.MinDF {
+			continue // skip rare words — PMI over-rewards low-frequency terms
+		}
+		score := s.calc.Score(r.count, dfToken, dfOther, total, s.pmiCfg.UseNPMI)
+		neighbors = append(neighbors, store.Neighbor{Token: r.token, PMI: score})
+	}
+
+	sort.Slice(neighbors, func(i, j int) bool {
+		return neighbors[i].PMI > neighbors[j].PMI
+	})
+	if len(neighbors) > k {
+		neighbors = neighbors[:k]
+	}
+	return neighbors, nil
 }
 
 // UpsertCard inserts or updates a card

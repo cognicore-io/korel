@@ -2,14 +2,17 @@ package memstore
 
 import (
 	"context"
-	"math"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/cognicore/korel/pkg/korel/pmi"
 	"github.com/cognicore/korel/pkg/korel/store"
 )
+
+// ipair is a sorted integer pair key for O(1) hashing.
+// Tokens are interned to int32 IDs; the pair is always stored with A < B.
+type ipair [2]int32
 
 // Store is an in-memory implementation of store.Store for tests.
 type Store struct {
@@ -18,20 +21,81 @@ type Store struct {
 	docs       map[int64]store.Doc
 	urlIndex   map[string]int64
 	tokenDF    map[string]int64
-	pairCounts map[string]int64
+	pairCounts map[ipair]int64
+	intern     map[string]int32 // token string → integer ID
+	internRev  []string         // integer ID → token string
+	neighbors  map[int32][]int32 // lazy: built on first TopNeighbors call (integer-keyed)
+	nbDirty    bool              // true when pairCounts changed since last neighbor rebuild
 	cards      map[string]store.Card
+	pmiCfg     pmi.Config
+	calc       *pmi.Calculator
 }
 
 // New creates a new in-memory store.
-func New() *Store {
+// An optional pmi.Config can be passed to control PMI computation;
+// if omitted, pmi.DefaultConfig() is used.
+func New(cfg ...pmi.Config) *Store {
+	c := pmi.DefaultConfig()
+	if len(cfg) > 0 {
+		c = cfg[0]
+	}
 	return &Store{
 		nextID:     1,
 		docs:       make(map[int64]store.Doc),
 		urlIndex:   make(map[string]int64),
 		tokenDF:    make(map[string]int64),
-		pairCounts: make(map[string]int64),
+		pairCounts: make(map[ipair]int64, 1024),
+		intern:     make(map[string]int32, 512),
+		nbDirty:    true,
 		cards:      make(map[string]store.Card),
+		pmiCfg:     c,
+		calc:       pmi.NewCalculatorFromConfig(c),
 	}
+}
+
+// internToken returns the integer ID for a token, assigning a new one if needed.
+// Caller must hold s.mu write lock.
+func (s *Store) internToken(tok string) int32 {
+	if id, ok := s.intern[tok]; ok {
+		return id
+	}
+	id := int32(len(s.internRev))
+	s.intern[tok] = id
+	s.internRev = append(s.internRev, tok)
+	return id
+}
+
+// makeIPair creates a sorted integer pair from two token strings.
+// Returns the pair and false if either token is empty or they are equal.
+// Caller must hold s.mu write lock (for internToken).
+func (s *Store) makeIPair(t1, t2 string) (ipair, bool) {
+	if t1 == "" || t2 == "" || t1 == t2 {
+		return ipair{}, false
+	}
+	a := s.internToken(t1)
+	b := s.internToken(t2)
+	if a > b {
+		a, b = b, a
+	}
+	return ipair{a, b}, true
+}
+
+// lookupIPair creates a sorted integer pair without interning new tokens.
+// Returns the pair and false if either token is not interned or they are equal.
+// Caller must hold s.mu read lock.
+func (s *Store) lookupIPair(t1, t2 string) (ipair, bool) {
+	if t1 == "" || t2 == "" || t1 == t2 {
+		return ipair{}, false
+	}
+	a, okA := s.intern[t1]
+	b, okB := s.intern[t2]
+	if !okA || !okB {
+		return ipair{}, false
+	}
+	if a > b {
+		a, b = b, a
+	}
+	return ipair{a, b}, true
 }
 
 // Close implements store.Store.
@@ -158,28 +222,107 @@ func (s *Store) GetTokenDF(ctx context.Context, token string) (int64, error) {
 func (s *Store) IncPair(ctx context.Context, t1, t2 string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := pairKey(t1, t2)
-	if key == "" {
-		return nil
-	}
-	s.pairCounts[key]++
+	s.incPairLocked(t1, t2)
 	return nil
+}
+
+// incPairLocked increments a pair count without acquiring the lock.
+func (s *Store) incPairLocked(t1, t2 string) {
+	p, ok := s.makeIPair(t1, t2)
+	if !ok {
+		return
+	}
+	s.pairCounts[p]++
+	s.nbDirty = true
 }
 
 // DecPair decrements the co-occurrence count for a pair.
 func (s *Store) DecPair(ctx context.Context, t1, t2 string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := pairKey(t1, t2)
-	if key == "" {
-		return nil
-	}
-	if s.pairCounts[key] <= 1 {
-		delete(s.pairCounts, key)
-	} else {
-		s.pairCounts[key]--
-	}
+	s.decPairLocked(t1, t2)
 	return nil
+}
+
+// decPairLocked decrements a pair count without acquiring the lock.
+func (s *Store) decPairLocked(t1, t2 string) {
+	p, ok := s.makeIPair(t1, t2)
+	if !ok {
+		return
+	}
+	if s.pairCounts[p] <= 1 {
+		delete(s.pairCounts, p)
+	} else {
+		s.pairCounts[p]--
+	}
+	s.nbDirty = true
+}
+
+// BatchIncPairs increments counts for multiple pairs under a single lock.
+// Pre-interns all unique tokens once, then operates with integer pairs only.
+func (s *Store) BatchIncPairs(pairs [][2]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Pre-intern all unique tokens in a single pass.
+	cache := make(map[string]int32, 256)
+	for _, p := range pairs {
+		if _, ok := cache[p[0]]; !ok {
+			cache[p[0]] = s.internToken(p[0])
+		}
+		if _, ok := cache[p[1]]; !ok {
+			cache[p[1]] = s.internToken(p[1])
+		}
+	}
+
+	// Increment using pre-interned IDs.
+	for _, p := range pairs {
+		if p[0] == "" || p[1] == "" || p[0] == p[1] {
+			continue
+		}
+		a, b := cache[p[0]], cache[p[1]]
+		if a > b {
+			a, b = b, a
+		}
+		s.pairCounts[ipair{a, b}]++
+	}
+	s.nbDirty = true
+}
+
+// BatchDecPairs decrements counts for multiple pairs under a single lock.
+// Pre-interns all unique tokens once, then operates with integer pairs only.
+func (s *Store) BatchDecPairs(pairs [][2]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Pre-intern all unique tokens in a single pass.
+	cache := make(map[string]int32, 256)
+	for _, p := range pairs {
+		if _, ok := cache[p[0]]; !ok {
+			cache[p[0]] = s.internToken(p[0])
+		}
+		if _, ok := cache[p[1]]; !ok {
+			cache[p[1]] = s.internToken(p[1])
+		}
+	}
+
+	// Decrement using pre-interned IDs.
+	for _, p := range pairs {
+		if p[0] == "" || p[1] == "" || p[0] == p[1] {
+			continue
+		}
+		a, b := cache[p[0]], cache[p[1]]
+		if a > b {
+			a, b = b, a
+		}
+		ip := ipair{a, b}
+		if s.pairCounts[ip] <= 1 {
+			delete(s.pairCounts, ip)
+		} else {
+			s.pairCounts[ip]--
+		}
+	}
+	s.nbDirty = true
 }
 
 // GetPMI returns the PMI value for a pair if present.
@@ -187,13 +330,13 @@ func (s *Store) GetPMI(ctx context.Context, t1, t2 string) (float64, bool, error
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	key := pairKey(t1, t2)
-	if key == "" {
+	p, ok := s.lookupIPair(t1, t2)
+	if !ok {
 		return 0, false, nil
 	}
 
-	count, ok := s.pairCounts[key]
-	if !ok {
+	count, exists := s.pairCounts[p]
+	if !exists {
 		return 0, false, nil
 	}
 
@@ -204,17 +347,17 @@ func (s *Store) GetPMI(ctx context.Context, t1, t2 string) (float64, bool, error
 		return 0, false, nil
 	}
 
-	epsilon := 1.0
-	numerator := (float64(count) + epsilon) * float64(total)
-	denominator := (float64(dfA) + epsilon) * (float64(dfB) + epsilon)
-	if denominator == 0 {
-		return 0, false, nil
-	}
-	return math.Log(numerator / denominator), true, nil
+	score := s.calc.Score(count, dfA, dfB, total, s.pmiCfg.UseNPMI)
+	return score, true, nil
 }
 
-// TopNeighbors returns top pairs by raw count.
+// TopNeighbors returns the top K neighbors ranked by PMI score.
+// Uses a lazy adjacency index — rebuilt from pairCounts on first call after mutations.
 func (s *Store) TopNeighbors(ctx context.Context, token string, k int) ([]store.Neighbor, error) {
+	s.mu.Lock()
+	s.rebuildNeighborsLocked()
+	s.mu.Unlock()
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -222,39 +365,71 @@ func (s *Store) TopNeighbors(ctx context.Context, token string, k int) ([]store.
 		k = 10
 	}
 
-	type neighborCount struct {
-		token string
-		count int64
+	total := int64(len(s.docs))
+	if total == 0 {
+		return nil, nil
 	}
 
-	var candidates []neighborCount
-	for key, count := range s.pairCounts {
-		tokens := strings.Split(key, "|")
-		if len(tokens) != 2 {
+	dfToken := s.tokenDF[token]
+	if dfToken == 0 {
+		return nil, nil
+	}
+
+	tokenID, ok := s.intern[token]
+	if !ok {
+		return nil, nil
+	}
+
+	nbIDs := s.neighbors[tokenID]
+	if len(nbIDs) == 0 {
+		return nil, nil
+	}
+
+	neighbors := make([]store.Neighbor, 0, len(nbIDs))
+	for _, otherID := range nbIDs {
+		other := s.internRev[otherID]
+		dfOther := s.tokenDF[other]
+		if dfOther < s.pmiCfg.MinDF {
 			continue
 		}
-		if tokens[0] == token {
-			candidates = append(candidates, neighborCount{token: tokens[1], count: count})
-		} else if tokens[1] == token {
-			candidates = append(candidates, neighborCount{token: tokens[0], count: count})
+
+		a, b := tokenID, otherID
+		if a > b {
+			a, b = b, a
 		}
+		count := s.pairCounts[ipair{a, b}]
+		score := s.calc.Score(count, dfToken, dfOther, total, s.pmiCfg.UseNPMI)
+
+		neighbors = append(neighbors, store.Neighbor{
+			Token: other,
+			PMI:   score,
+		})
 	}
 
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].count > candidates[j].count
+	sort.Slice(neighbors, func(i, j int) bool {
+		return neighbors[i].PMI > neighbors[j].PMI
 	})
-	if len(candidates) > k {
-		candidates = candidates[:k]
+	if len(neighbors) > k {
+		neighbors = neighbors[:k]
 	}
 
-	neighbors := make([]store.Neighbor, len(candidates))
-	for i, cand := range candidates {
-		neighbors[i] = store.Neighbor{
-			Token: cand.token,
-			PMI:   float64(cand.count),
-		}
-	}
 	return neighbors, nil
+}
+
+// rebuildNeighborsLocked rebuilds the adjacency index from pairCounts.
+// Uses integer keys to avoid string hashing entirely during rebuild.
+// Caller must hold s.mu write lock.
+func (s *Store) rebuildNeighborsLocked() {
+	if !s.nbDirty {
+		return
+	}
+	nb := make(map[int32][]int32, len(s.internRev))
+	for p := range s.pairCounts {
+		nb[p[0]] = append(nb[p[0]], p[1])
+		nb[p[1]] = append(nb[p[1]], p[0])
+	}
+	s.neighbors = nb
+	s.nbDirty = false
 }
 
 // UpsertCard stores a card in memory.
@@ -327,17 +502,4 @@ func copyDoc(d store.Doc) store.Doc {
 		LinksOut:    d.LinksOut,
 		Tokens:      copySlice(d.Tokens),
 	}
-}
-
-func pairKey(a, b string) string {
-	if a == "" || b == "" {
-		return ""
-	}
-	if a == b {
-		return ""
-	}
-	if a > b {
-		a, b = b, a
-	}
-	return a + "|" + b
 }
