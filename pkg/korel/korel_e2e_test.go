@@ -395,6 +395,14 @@ func (m *mockStoreForE2E) Taxonomy() store.TaxonomyView {
 	return nil
 }
 
+func (m *mockStoreForE2E) UpsertStoplist(ctx context.Context, tokens []string) error {
+	return nil
+}
+
+func (m *mockStoreForE2E) UpsertDictEntry(ctx context.Context, phrase, canonical, category string) error {
+	return nil
+}
+
 // queryStoreAdapter adapts store.Store to query.Store interface
 type queryStoreAdapter struct {
 	*mockStoreForE2E

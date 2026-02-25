@@ -69,6 +69,50 @@ func (k *Korel) Close() error {
 	return k.store.Close()
 }
 
+// RebuildPipeline constructs a new ingest pipeline from the store's current
+// stoplist, dictionary, and taxonomy. Call after AutoTune to pick up newly
+// discovered stopwords and rules.
+func (k *Korel) RebuildPipeline() {
+	var stopwords []string
+	if sl := k.store.Stoplist(); sl != nil {
+		stopwords = sl.AllStops()
+	}
+
+	var dictEntries []ingest.DictEntry
+	if dv := k.store.Dict(); dv != nil {
+		for _, e := range dv.AllEntries() {
+			dictEntries = append(dictEntries, ingest.DictEntry{
+				Canonical: e.Canonical,
+				Category:  e.Category,
+				Variants:  []string{e.Phrase},
+			})
+		}
+	}
+
+	tokenizer := ingest.NewTokenizer(stopwords)
+	parser := ingest.NewMultiTokenParser(dictEntries)
+	taxonomy := ingest.NewTaxonomy()
+
+	if tv := k.store.Taxonomy(); tv != nil {
+		for name, keywords := range tv.AllSectors() {
+			taxonomy.AddSector(name, keywords)
+		}
+		for name, keywords := range tv.AllEvents() {
+			taxonomy.AddEvent(name, keywords)
+		}
+		for name, keywords := range tv.AllRegions() {
+			taxonomy.AddRegion(name, keywords)
+		}
+		for entType, names := range tv.AllEntities() {
+			for name, keywords := range names {
+				taxonomy.AddEntity(entType, name, keywords)
+			}
+		}
+	}
+
+	k.pipeline = ingest.NewPipeline(tokenizer, parser, taxonomy)
+}
+
 // IngestDoc represents a document to be ingested
 type IngestDoc struct {
 	URL         string
@@ -243,6 +287,32 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 		return val
 	}
 
+	// Compute damping map for query tokens based on neighbor counts.
+	dampingMap := make(map[string]float64, len(processed.Tokens))
+	dampCfg := signals.DefaultDampingConfig()
+	for _, qt := range processed.Tokens {
+		neighbors, err := k.store.TopNeighbors(ctx, qt, 0) // 0 = get count only
+		if err != nil {
+			dampingMap[qt] = 1.0
+			continue
+		}
+		density := signals.TokenDensity{
+			Token:         qt,
+			NeighborCount: len(neighbors),
+			DampingFactor: 1.0,
+		}
+		// Estimate vocab size from number of unique tokens across candidate docs.
+		vocabSize := len(docs) * 10 // rough estimate
+		if vocabSize > 0 {
+			density.DensityRatio = float64(len(neighbors)) / float64(vocabSize)
+		}
+		density.DampingFactor = signals.ComputeDamping(qt, &searchDensityProvider{
+			neighborCount: len(neighbors),
+			vocabSize:     vocabSize,
+		}, dampCfg).DampingFactor
+		dampingMap[qt] = density.DampingFactor
+	}
+
 	scoredDocs := make([]scored, 0, len(docs))
 	now := req.Now
 	if now.IsZero() {
@@ -257,7 +327,7 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 			PublishedAt: doc.PublishedAt,
 			LinksOut:    doc.LinksOut,
 		}
-		breakdown := scorer.ScoreWithBreakdown(query, candidate, now, pmiFunc)
+		breakdown := scorer.ScoreWithBreakdown(query, candidate, now, pmiFunc, dampingMap)
 		scoredDocs = append(scoredDocs, scored{
 			doc:        doc,
 			breakdown:  breakdown,
@@ -568,6 +638,26 @@ func (k *Korel) AutoTune(ctx context.Context, texts []string, opts *AutoTuneOpti
 	}
 	result.RuleSuggestions = suggestions
 
+	// Persist discovered stopwords to store.
+	allStops := make([]string, 0, len(stopSet))
+	for tok := range stopSet {
+		allStops = append(allStops, tok)
+	}
+	if err := k.store.UpsertStoplist(ctx, allStops); err != nil {
+		return result, err
+	}
+
+	// Persist high-confidence rules as dict entries and feed into inference engine.
+	for _, s := range suggestions {
+		if s.Confidence >= 0.6 {
+			phrase := s.Subject + " " + s.Object
+			if err := k.store.UpsertDictEntry(ctx, phrase, phrase, s.Relation); err != nil {
+				return result, err
+			}
+			k.inf.AddFact(s.Relation, s.Subject, s.Object)
+		}
+	}
+
 	return result, nil
 }
 
@@ -603,6 +693,15 @@ type batchPairStore interface {
 	BatchIncPairs(pairs [][2]string)
 	BatchDecPairs(pairs [][2]string)
 }
+
+// searchDensityProvider implements signals.DensityProvider for search-time damping.
+type searchDensityProvider struct {
+	neighborCount int
+	vocabSize     int
+}
+
+func (p *searchDensityProvider) NeighborCount(_ string, _ float64) int { return p.neighborCount }
+func (p *searchDensityProvider) VocabSize() int                       { return p.vocabSize }
 
 func (k *Korel) updateStats(ctx context.Context, tokens []string, delta int) error {
 	if delta == 0 {

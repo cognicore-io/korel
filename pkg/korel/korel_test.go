@@ -67,6 +67,109 @@ func TestIngestReingestAdjustsStats(t *testing.T) {
 	assertPairExists(t, ctx, engine, "alpha", "gamma", true)
 }
 
+func TestAutoTunePersistAndRebuild(t *testing.T) {
+	ctx := context.Background()
+
+	ms := memstore.New()
+	defer ms.Close()
+
+	pipeline := ingest.NewPipeline(
+		ingest.NewTokenizer(nil),
+		ingest.NewMultiTokenParser(nil),
+		ingest.NewTaxonomy(),
+	)
+
+	engine := New(Options{
+		Store:           ms,
+		Pipeline:        pipeline,
+		Inference:       simple.New(),
+		Weights:         ScoreWeights{AlphaPMI: 1},
+		RecencyHalfLife: 14,
+	})
+	defer engine.Close()
+
+	// Build a small corpus where "the" appears in every doc (obvious stopword).
+	// Other tokens are topical and should NOT be flagged.
+	corpus := []string{
+		"the cat sat on the mat",
+		"the dog chased the ball",
+		"the fish swam in the sea",
+		"the bird flew over the tree",
+		"the cat played with the yarn",
+		"the dog fetched the stick",
+		"the fish hid under the rock",
+		"the bird sang in the rain",
+		"the cat napped on the couch",
+		"the dog ran through the park",
+	}
+
+	result, err := engine.AutoTune(ctx, corpus, &AutoTuneOptions{
+		MaxIterations: 2,
+		Thresholds:    AutoTuneDefaults(),
+	})
+	if err != nil {
+		t.Fatalf("AutoTune: %v", err)
+	}
+
+	// "the" should be discovered as a stopword (appears in 100% of docs).
+	foundThe := false
+	for _, c := range result.StopwordCandidates {
+		if c.Token == "the" {
+			foundThe = true
+			break
+		}
+	}
+	if !foundThe {
+		t.Fatal("expected 'the' to be discovered as a stopword")
+	}
+
+	// Verify persistence: store should have a non-nil Stoplist view.
+	sl := ms.Stoplist()
+	if sl == nil {
+		t.Fatal("expected Stoplist to be non-nil after AutoTune")
+	}
+	if !sl.IsStop("the") {
+		t.Fatal("expected 'the' in persisted stoplist")
+	}
+
+	// RebuildPipeline should pick up the persisted stopwords.
+	engine.RebuildPipeline()
+
+	// Ingest a doc with "the" — it should be filtered by the new pipeline.
+	if err := engine.Ingest(ctx, IngestDoc{
+		URL:         "https://example.com/post-rebuild",
+		Title:       "Post Rebuild",
+		PublishedAt: time.Now(),
+		BodyText:    "the fox jumped over the fence",
+	}); err != nil {
+		t.Fatalf("Ingest after rebuild: %v", err)
+	}
+
+	doc, found, err := ms.GetDocByURL(ctx, "https://example.com/post-rebuild")
+	if err != nil || !found {
+		t.Fatalf("GetDocByURL: err=%v found=%v", err, found)
+	}
+
+	// "the" should NOT be in the stored tokens.
+	for _, tok := range doc.Tokens {
+		if tok == "the" {
+			t.Fatal("expected 'the' to be filtered from tokens after RebuildPipeline")
+		}
+	}
+
+	// But topical tokens should still be present.
+	hasTopical := false
+	for _, tok := range doc.Tokens {
+		if tok == "fox" || tok == "jumped" || tok == "fence" {
+			hasTopical = true
+			break
+		}
+	}
+	if !hasTopical {
+		t.Fatalf("expected topical tokens in doc, got %v", doc.Tokens)
+	}
+}
+
 func assertTokenDF(t *testing.T, ctx context.Context, k *Korel, token string, expected int64) {
 	t.Helper()
 	df, err := k.store.GetTokenDF(ctx, token)

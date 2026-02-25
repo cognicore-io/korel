@@ -36,7 +36,7 @@ func TestSchemaCreationIdempotent(t *testing.T) {
 		t.Fatalf("Count tables: %v", err)
 	}
 
-	expected := 7 // docs, doc_tokens, doc_cats, doc_entities, token_df, token_pairs, cards
+	expected := 13 // docs, doc_tokens, doc_cats, doc_entities, token_df, token_pairs, cards, stoplist, dict_entries, taxonomy_sectors, taxonomy_events, taxonomy_regions, taxonomy_entities
 	if count != expected {
 		t.Errorf("Expected %d tables, got %d", expected, count)
 	}
@@ -316,7 +316,7 @@ func TestConcurrentOpen(t *testing.T) {
 		t.Fatalf("Count tables: %v", err)
 	}
 
-	if count != 7 {
-		t.Errorf("Expected 7 tables, got %d", count)
+	if count != 13 {
+		t.Errorf("Expected 13 tables, got %d", count)
 	}
 }

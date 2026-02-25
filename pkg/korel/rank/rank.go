@@ -41,38 +41,7 @@ type Candidate struct {
 //
 // score = α·PMI + β·cat_overlap + γ·recency + η·authority - δ·len_penalty
 func (s *Scorer) Score(query Query, candidate Candidate, now time.Time, pmiFunc func(qt, dt string) float64) float64 {
-	// PMI component: average of max PMI per query token
-	pmiSum := 0.0
-	for _, qt := range query.Tokens {
-		maxPMI := 0.0
-		for _, dt := range candidate.Tokens {
-			pmi := pmiFunc(qt, dt)
-			if pmi > maxPMI {
-				maxPMI = pmi
-			}
-		}
-		pmiSum += maxPMI
-	}
-	pmiPart := pmiSum / math.Max(1, float64(len(query.Tokens)))
-
-	// Category overlap (Jaccard similarity)
-	catOverlap := jaccard(query.Categories, candidate.Categories)
-
-	// Recency (exponential decay)
-	ageDays := now.Sub(candidate.PublishedAt).Hours() / 24.0
-	recency := math.Exp(-ageDays / s.halfLifeDays)
-
-	// Authority (log of outbound links + 1)
-	authority := math.Log(float64(candidate.LinksOut + 1))
-
-	// Length penalty (log of token count + 1)
-	lenPenalty := math.Log(float64(len(candidate.Tokens) + 1))
-
-	return s.weights.AlphaPMI*pmiPart +
-		s.weights.BetaCats*catOverlap +
-		s.weights.GammaRecency*recency +
-		s.weights.EtaAuthority*authority -
-		s.weights.DeltaLen*lenPenalty
+	return s.ScoreWithBreakdown(query, candidate, now, pmiFunc).Total
 }
 
 // ScoreBreakdown provides detailed scoring information
@@ -82,12 +51,22 @@ type ScoreBreakdown struct {
 	Recency   float64
 	Authority float64
 	Len       float64
+	Damping   float64 // average damping factor applied to PMI (1.0 = no damping)
 	Total     float64
 }
 
-// ScoreWithBreakdown calculates score with detailed breakdown
-func (s *Scorer) ScoreWithBreakdown(query Query, candidate Candidate, now time.Time, pmiFunc func(qt, dt string) float64) ScoreBreakdown {
+// ScoreWithBreakdown calculates score with detailed breakdown.
+// An optional dampingMap scales the PMI contribution per query token.
+// Hub tokens (connecting to many neighbors) should have damping < 1.0.
+// Pass nil for no damping.
+func (s *Scorer) ScoreWithBreakdown(query Query, candidate Candidate, now time.Time, pmiFunc func(qt, dt string) float64, dampingMap ...map[string]float64) ScoreBreakdown {
+	var dmap map[string]float64
+	if len(dampingMap) > 0 {
+		dmap = dampingMap[0]
+	}
+
 	pmiSum := 0.0
+	dampSum := 0.0
 	for _, qt := range query.Tokens {
 		maxPMI := 0.0
 		for _, dt := range candidate.Tokens {
@@ -96,9 +75,20 @@ func (s *Scorer) ScoreWithBreakdown(query Query, candidate Candidate, now time.T
 				maxPMI = pmi
 			}
 		}
-		pmiSum += maxPMI
+		d := 1.0
+		if dmap != nil {
+			if v, ok := dmap[qt]; ok {
+				d = v
+			}
+		}
+		pmiSum += maxPMI * d
+		dampSum += d
 	}
 	pmiPart := pmiSum / math.Max(1, float64(len(query.Tokens)))
+	avgDamping := 1.0
+	if len(query.Tokens) > 0 {
+		avgDamping = dampSum / float64(len(query.Tokens))
+	}
 
 	catOverlap := jaccard(query.Categories, candidate.Categories)
 	ageDays := now.Sub(candidate.PublishedAt).Hours() / 24.0
@@ -112,6 +102,7 @@ func (s *Scorer) ScoreWithBreakdown(query Query, candidate Candidate, now time.T
 		Recency:   s.weights.GammaRecency * recency,
 		Authority: s.weights.EtaAuthority * authority,
 		Len:       s.weights.DeltaLen * lenPenalty,
+		Damping:   avgDamping,
 	}
 	breakdown.Total = breakdown.PMI + breakdown.Cats + breakdown.Recency + breakdown.Authority - breakdown.Len
 

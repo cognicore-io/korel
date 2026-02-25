@@ -640,7 +640,11 @@ func TestSQLiteIntegrationSchemaExists(t *testing.T) {
 		tables = append(tables, name)
 	}
 
-	expectedTables := []string{"cards", "doc_cats", "doc_entities", "doc_tokens", "docs", "token_df", "token_pairs"}
+	expectedTables := []string{
+		"cards", "dict_entries", "doc_cats", "doc_entities", "doc_tokens",
+		"docs", "stoplist", "taxonomy_entities", "taxonomy_events",
+		"taxonomy_regions", "taxonomy_sectors", "token_df", "token_pairs",
+	}
 	if len(tables) != len(expectedTables) {
 		t.Errorf("Expected %d tables, got %d: %v", len(expectedTables), len(tables), tables)
 	}
@@ -656,5 +660,123 @@ func TestSQLiteIntegrationSchemaExists(t *testing.T) {
 		if !found {
 			t.Errorf("Table %q not found", expected)
 		}
+	}
+}
+
+// TestSQLiteStoplist tests stoplist persistence and view
+func TestSQLiteStoplist(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	st, err := OpenSQLite(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	defer st.Close()
+
+	// Initially nil
+	if st.Stoplist() != nil {
+		t.Fatal("expected nil Stoplist when empty")
+	}
+
+	// Upsert stoplist
+	if err := st.UpsertStoplist(ctx, []string{"the", "a", "and"}); err != nil {
+		t.Fatalf("UpsertStoplist: %v", err)
+	}
+
+	sl := st.Stoplist()
+	if sl == nil {
+		t.Fatal("expected non-nil Stoplist after UpsertStoplist")
+	}
+
+	if !sl.IsStop("the") {
+		t.Error("expected 'the' to be a stop word")
+	}
+	if sl.IsStop("machine") {
+		t.Error("expected 'machine' NOT to be a stop word")
+	}
+
+	stops := sl.AllStops()
+	if len(stops) != 3 {
+		t.Fatalf("expected 3 stops, got %d", len(stops))
+	}
+	// Should be sorted
+	if stops[0] != "a" || stops[1] != "and" || stops[2] != "the" {
+		t.Errorf("expected sorted [a and the], got %v", stops)
+	}
+
+	// Replace stoplist
+	if err := st.UpsertStoplist(ctx, []string{"new"}); err != nil {
+		t.Fatalf("UpsertStoplist (replace): %v", err)
+	}
+
+	sl = st.Stoplist()
+	if sl.IsStop("the") {
+		t.Error("old stopword should be gone after replace")
+	}
+	if !sl.IsStop("new") {
+		t.Error("new stopword should be present")
+	}
+}
+
+// TestSQLiteDict tests dictionary persistence and view
+func TestSQLiteDict(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	st, err := OpenSQLite(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("OpenSQLite: %v", err)
+	}
+	defer st.Close()
+
+	// Initially nil
+	if st.Dict() != nil {
+		t.Fatal("expected nil Dict when empty")
+	}
+
+	// Add entries
+	if err := st.UpsertDictEntry(ctx, "ml", "machine learning", "ai"); err != nil {
+		t.Fatalf("UpsertDictEntry: %v", err)
+	}
+	if err := st.UpsertDictEntry(ctx, "nn", "neural network", "ai"); err != nil {
+		t.Fatalf("UpsertDictEntry: %v", err)
+	}
+
+	dv := st.Dict()
+	if dv == nil {
+		t.Fatal("expected non-nil Dict after UpsertDictEntry")
+	}
+
+	canonical, cat, ok := dv.Lookup("ml")
+	if !ok {
+		t.Fatal("expected 'ml' to be found")
+	}
+	if canonical != "machine learning" || cat != "ai" {
+		t.Errorf("expected 'machine learning' / 'ai', got %q / %q", canonical, cat)
+	}
+
+	_, _, ok = dv.Lookup("unknown")
+	if ok {
+		t.Error("expected 'unknown' NOT to be found")
+	}
+
+	// Overwrite
+	if err := st.UpsertDictEntry(ctx, "ml", "markup language", "web"); err != nil {
+		t.Fatalf("UpsertDictEntry (overwrite): %v", err)
+	}
+
+	canonical, cat, ok = st.Dict().Lookup("ml")
+	if !ok {
+		t.Fatal("expected 'ml' to be found after overwrite")
+	}
+	if canonical != "markup language" || cat != "web" {
+		t.Errorf("expected overwritten entry, got %q / %q", canonical, cat)
+	}
+
+	// AllEntries
+	entries := st.Dict().AllEntries()
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
 }

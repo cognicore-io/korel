@@ -3,6 +3,7 @@ package memstore
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +30,17 @@ type Store struct {
 	cards      map[string]store.Card
 	pmiCfg     pmi.Config
 	calc       *pmi.Calculator
+	stops      map[string]struct{}              // stopword set
+	dict       map[string]dictEntry             // phrase → {canonical, category}
+	taxSectors map[string][]string              // sector name → keywords
+	taxEvents  map[string][]string              // event name → keywords
+	taxRegions map[string][]string              // region name → keywords
+	taxEnts    map[string]map[string][]string   // entity type → name → keywords
+}
+
+type dictEntry struct {
+	canonical string
+	category  string
 }
 
 // New creates a new in-memory store.
@@ -460,14 +472,227 @@ func (s *Store) GetCardsByPeriod(ctx context.Context, period string, k int) ([]s
 	return result, nil
 }
 
-// Stoplist returns nil (not implemented).
-func (s *Store) Stoplist() store.StoplistView { return nil }
+// Stoplist returns a read-only view of the stopword set, or nil if not configured.
+func (s *Store) Stoplist() store.StoplistView {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.stops == nil {
+		return nil
+	}
+	return &memStoplistView{store: s}
+}
 
-// Dict returns nil (not implemented).
-func (s *Store) Dict() store.DictView { return nil }
+// Dict returns a read-only view of the multi-token dictionary, or nil if not configured.
+func (s *Store) Dict() store.DictView {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.dict == nil {
+		return nil
+	}
+	return &memDictView{store: s}
+}
 
-// Taxonomy returns nil (not implemented).
-func (s *Store) Taxonomy() store.TaxonomyView { return nil }
+// Taxonomy returns a read-only view of the taxonomy, or nil if not configured.
+func (s *Store) Taxonomy() store.TaxonomyView {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.taxSectors == nil && s.taxEvents == nil && s.taxRegions == nil && s.taxEnts == nil {
+		return nil
+	}
+	return &memTaxonomyView{store: s}
+}
+
+// UpsertStoplist replaces the stopword set (implements store.Store).
+func (s *Store) UpsertStoplist(ctx context.Context, tokens []string) error {
+	s.SetStoplist(tokens)
+	return nil
+}
+
+// UpsertDictEntry adds or replaces a dictionary entry (implements store.Store).
+func (s *Store) UpsertDictEntry(ctx context.Context, phrase, canonical, category string) error {
+	s.AddDictEntry(phrase, canonical, category)
+	return nil
+}
+
+// --- Mutators (memstore-specific convenience methods) ---
+
+// SetStoplist replaces the stopword set.
+func (s *Store) SetStoplist(tokens []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stops = make(map[string]struct{}, len(tokens))
+	for _, tok := range tokens {
+		s.stops[tok] = struct{}{}
+	}
+}
+
+// AddDictEntry adds or replaces a dictionary entry.
+func (s *Store) AddDictEntry(phrase, canonical, category string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.dict == nil {
+		s.dict = make(map[string]dictEntry)
+	}
+	s.dict[phrase] = dictEntry{canonical: canonical, category: category}
+}
+
+// SetTaxonomy replaces the full taxonomy.
+func (s *Store) SetTaxonomy(sectors, events, regions map[string][]string, entities map[string]map[string][]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.taxSectors = sectors
+	s.taxEvents = events
+	s.taxRegions = regions
+	s.taxEnts = entities
+}
+
+// --- StoplistView ---
+
+type memStoplistView struct{ store *Store }
+
+func (v *memStoplistView) IsStop(token string) bool {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	_, ok := v.store.stops[token]
+	return ok
+}
+
+func (v *memStoplistView) AllStops() []string {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	out := make([]string, 0, len(v.store.stops))
+	for tok := range v.store.stops {
+		out = append(out, tok)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// --- DictView ---
+
+type memDictView struct{ store *Store }
+
+func (v *memDictView) Lookup(phrase string) (canonical string, category string, ok bool) {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	e, found := v.store.dict[phrase]
+	if !found {
+		return "", "", false
+	}
+	return e.canonical, e.category, true
+}
+
+func (v *memDictView) AllEntries() []store.DictEntryData {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	entries := make([]store.DictEntryData, 0, len(v.store.dict))
+	for phrase, e := range v.store.dict {
+		entries = append(entries, store.DictEntryData{
+			Phrase:    phrase,
+			Canonical: e.canonical,
+			Category:  e.category,
+		})
+	}
+	return entries
+}
+
+// --- TaxonomyView ---
+
+type memTaxonomyView struct{ store *Store }
+
+func (v *memTaxonomyView) CategoriesForToken(token string) []string {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	var cats []string
+	lower := strings.ToLower(token)
+	for name, keywords := range v.store.taxSectors {
+		for _, kw := range keywords {
+			if strings.ToLower(kw) == lower {
+				cats = append(cats, name)
+				break
+			}
+		}
+	}
+	for name, keywords := range v.store.taxEvents {
+		for _, kw := range keywords {
+			if strings.ToLower(kw) == lower {
+				cats = append(cats, name)
+				break
+			}
+		}
+	}
+	for name, keywords := range v.store.taxRegions {
+		for _, kw := range keywords {
+			if strings.ToLower(kw) == lower {
+				cats = append(cats, name)
+				break
+			}
+		}
+	}
+	return cats
+}
+
+func (v *memTaxonomyView) EntitiesInText(text string) []store.Entity {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	lower := strings.ToLower(text)
+	var ents []store.Entity
+	for entType, names := range v.store.taxEnts {
+		for name, keywords := range names {
+			for _, kw := range keywords {
+				if strings.Contains(lower, strings.ToLower(kw)) {
+					ents = append(ents, store.Entity{Type: entType, Value: name})
+					break
+				}
+			}
+		}
+	}
+	return ents
+}
+
+func (v *memTaxonomyView) AllSectors() map[string][]string {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	return copyStringSliceMap(v.store.taxSectors)
+}
+
+func (v *memTaxonomyView) AllEvents() map[string][]string {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	return copyStringSliceMap(v.store.taxEvents)
+}
+
+func (v *memTaxonomyView) AllRegions() map[string][]string {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	return copyStringSliceMap(v.store.taxRegions)
+}
+
+func (v *memTaxonomyView) AllEntities() map[string]map[string][]string {
+	v.store.mu.RLock()
+	defer v.store.mu.RUnlock()
+	out := make(map[string]map[string][]string, len(v.store.taxEnts))
+	for typ, names := range v.store.taxEnts {
+		nm := make(map[string][]string, len(names))
+		for name, kws := range names {
+			cp := make([]string, len(kws))
+			copy(cp, kws)
+			nm[name] = cp
+		}
+		out[typ] = nm
+	}
+	return out
+}
+
+func copyStringSliceMap(m map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(m))
+	for k, v := range m {
+		cp := make([]string, len(v))
+		copy(cp, v)
+		out[k] = cp
+	}
+	return out
+}
 
 func containsAny(tokens []string, set map[string]struct{}) bool {
 	for _, tok := range tokens {

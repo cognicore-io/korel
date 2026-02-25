@@ -406,6 +406,91 @@ func TestScorerManyTokens(t *testing.T) {
 	}
 }
 
+func TestScorerDampingReducesPMI(t *testing.T) {
+	weights := Weights{AlphaPMI: 1.0}
+	scorer := NewScorer(weights, 14.0)
+
+	query := Query{Tokens: []string{"hub-token"}}
+	candidate := Candidate{
+		Tokens:      []string{"hub-token"},
+		PublishedAt: time.Now(),
+	}
+	pmiFunc := func(qt, dt string) float64 { return 2.0 }
+
+	// Without damping.
+	undamped := scorer.ScoreWithBreakdown(query, candidate, time.Now(), pmiFunc)
+
+	// With damping: hub-token gets 0.1 factor.
+	dampMap := map[string]float64{"hub-token": 0.1}
+	damped := scorer.ScoreWithBreakdown(query, candidate, time.Now(), pmiFunc, dampMap)
+
+	// Damped PMI should be ~10% of undamped.
+	ratio := damped.PMI / undamped.PMI
+	if math.Abs(ratio-0.1) > 0.01 {
+		t.Errorf("expected damped PMI to be ~10%% of undamped, got ratio %.3f (damped=%.3f, undamped=%.3f)",
+			ratio, damped.PMI, undamped.PMI)
+	}
+
+	// Damping field should reflect the applied factor.
+	if math.Abs(damped.Damping-0.1) > 0.01 {
+		t.Errorf("expected Damping=0.1, got %.3f", damped.Damping)
+	}
+}
+
+func TestScorerDampingNonHubUnaffected(t *testing.T) {
+	weights := Weights{AlphaPMI: 1.0}
+	scorer := NewScorer(weights, 14.0)
+
+	query := Query{Tokens: []string{"normal-token"}}
+	candidate := Candidate{
+		Tokens:      []string{"normal-token"},
+		PublishedAt: time.Now(),
+	}
+	pmiFunc := func(qt, dt string) float64 { return 2.0 }
+
+	// Damping map with no entry for "normal-token" — defaults to 1.0.
+	dampMap := map[string]float64{"other": 0.1}
+	damped := scorer.ScoreWithBreakdown(query, candidate, time.Now(), pmiFunc, dampMap)
+	undamped := scorer.ScoreWithBreakdown(query, candidate, time.Now(), pmiFunc)
+
+	if math.Abs(damped.PMI-undamped.PMI) > 0.001 {
+		t.Errorf("non-hub token should have same PMI: damped=%.3f undamped=%.3f", damped.PMI, undamped.PMI)
+	}
+}
+
+func TestScorerDampingMultipleTokens(t *testing.T) {
+	weights := Weights{AlphaPMI: 1.0}
+	scorer := NewScorer(weights, 14.0)
+
+	query := Query{Tokens: []string{"hub", "normal"}}
+	candidate := Candidate{
+		Tokens:      []string{"hub", "normal"},
+		PublishedAt: time.Now(),
+	}
+	pmiFunc := func(qt, dt string) float64 {
+		if qt == dt {
+			return 2.0
+		}
+		return 0.0
+	}
+
+	dampMap := map[string]float64{"hub": 0.2} // normal defaults to 1.0
+
+	damped := scorer.ScoreWithBreakdown(query, candidate, time.Now(), pmiFunc, dampMap)
+
+	// hub contributes 2.0 * 0.2 = 0.4, normal contributes 2.0 * 1.0 = 2.0
+	// Average PMI = (0.4 + 2.0) / 2 = 1.2 → weighted = 1.0 * 1.2 = 1.2
+	expected := 1.2
+	if math.Abs(damped.PMI-expected) > 0.01 {
+		t.Errorf("expected PMI=%.2f, got %.3f", expected, damped.PMI)
+	}
+
+	// Average damping = (0.2 + 1.0) / 2 = 0.6
+	if math.Abs(damped.Damping-0.6) > 0.01 {
+		t.Errorf("expected Damping=0.6, got %.3f", damped.Damping)
+	}
+}
+
 func TestScorerBreakdownComponentsSum(t *testing.T) {
 	weights := Weights{
 		AlphaPMI:     1.0,

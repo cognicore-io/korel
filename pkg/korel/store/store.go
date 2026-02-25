@@ -31,6 +31,10 @@ type Store interface {
 	Stoplist() StoplistView
 	Dict() DictView
 	Taxonomy() TaxonomyView
+
+	// Persistence for AutoTune results
+	UpsertStoplist(ctx context.Context, tokens []string) error
+	UpsertDictEntry(ctx context.Context, phrase, canonical, category string) error
 }
 
 // Doc represents a stored document
@@ -74,13 +78,25 @@ type StoplistView interface {
 	AllStops() []string
 }
 
+// DictEntryData holds a single dictionary entry for iteration.
+type DictEntryData struct {
+	Phrase    string
+	Canonical string
+	Category  string
+}
+
 // DictView provides read access to the multi-token dictionary
 type DictView interface {
 	Lookup(phrase string) (canonical string, category string, ok bool)
+	AllEntries() []DictEntryData
 }
 
 // TaxonomyView provides read access to the taxonomy
 type TaxonomyView interface {
 	CategoriesForToken(token string) []string
 	EntitiesInText(text string) []Entity
+	AllSectors() map[string][]string
+	AllEvents() map[string][]string
+	AllRegions() map[string][]string
+	AllEntities() map[string]map[string][]string
 }

@@ -65,6 +65,10 @@ func (f *fakeStore) GetCardsByPeriod(ctx context.Context, period string, k int) 
 func (f *fakeStore) Stoplist() store.StoplistView { return nil }
 func (f *fakeStore) Dict() store.DictView         { return nil }
 func (f *fakeStore) Taxonomy() store.TaxonomyView { return nil }
+func (f *fakeStore) UpsertStoplist(ctx context.Context, tokens []string) error { return nil }
+func (f *fakeStore) UpsertDictEntry(ctx context.Context, phrase, canonical, category string) error {
+	return nil
+}
 
 func TestCleanerUpdatesTokens(t *testing.T) {
 	tokenizer := ingest.NewTokenizer([]string{"the"})
