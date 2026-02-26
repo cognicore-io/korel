@@ -20,6 +20,7 @@ func main() {
 		dataPath     = flag.String("data", "", "Input JSONL file (required)")
 		stoplistPath = flag.String("stoplist", "", "Stoplist file (required)")
 		dictPath     = flag.String("dict", "", "Dictionary file (required)")
+		baseDictPath = flag.String("base-dict", "", "Base dictionary to merge (e.g., configs/base-tech.dict)")
 		taxonomyPath = flag.String("taxonomy", "", "Taxonomy file (required)")
 		rulesPath    = flag.String("rules", "", "Rules file (optional)")
 	)
@@ -47,6 +48,7 @@ func main() {
 	loader := config.Loader{
 		StoplistPath: *stoplistPath,
 		DictPath:     *dictPath,
+		BaseDictPath: *baseDictPath,
 		TaxonomyPath: *taxonomyPath,
 		RulesPath:    *rulesPath,
 	}

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cognicore/korel/pkg/korel/ingest"
 )
@@ -10,6 +11,7 @@ import (
 type Loader struct {
 	StoplistPath string
 	DictPath     string
+	BaseDictPath string // Optional base dictionary merged under DictPath entries
 	TaxonomyPath string
 	RulesPath    string
 }
@@ -37,24 +39,24 @@ func (l *Loader) Load() (*Components, error) {
 		comp.Tokenizer = ingest.NewTokenizer([]string{})
 	}
 
-	// Load dictionary
+	// Load dictionary (merge base + domain-specific; domain overrides base)
+	var allConfigEntries []DictEntry
+	if l.BaseDictPath != "" {
+		baseDict, err := LoadDict(l.BaseDictPath)
+		if err != nil {
+			return nil, fmt.Errorf("load base dictionary: %w", err)
+		}
+		allConfigEntries = append(allConfigEntries, baseDict.Entries...)
+	}
 	if l.DictPath != "" {
 		dict, err := LoadDict(l.DictPath)
 		if err != nil {
 			return nil, fmt.Errorf("load dictionary: %w", err)
 		}
-		entries := make([]ingest.DictEntry, len(dict.Entries))
-		for i, e := range dict.Entries {
-			entries[i] = ingest.DictEntry{
-				Canonical: e.Canonical,
-				Variants:  e.Variants,
-				Category:  e.Category,
-			}
-		}
-		comp.Parser = ingest.NewMultiTokenParser(entries)
-	} else {
-		comp.Parser = ingest.NewMultiTokenParser([]ingest.DictEntry{})
+		allConfigEntries = append(allConfigEntries, dict.Entries...)
 	}
+	entries := deduplicateDictEntries(allConfigEntries)
+	comp.Parser = ingest.NewMultiTokenParser(entries)
 
 	// Load taxonomy
 	if l.TaxonomyPath != "" {
@@ -88,4 +90,26 @@ func (l *Loader) Load() (*Components, error) {
 	}
 
 	return comp, nil
+}
+
+// deduplicateDictEntries merges entries by canonical key (case-insensitive).
+// Later entries override earlier ones, so domain-specific entries win over base.
+func deduplicateDictEntries(cfgEntries []DictEntry) []ingest.DictEntry {
+	seen := make(map[string]int) // lowercase canonical → index in result
+	var result []ingest.DictEntry
+	for _, e := range cfgEntries {
+		key := strings.ToLower(e.Canonical)
+		ie := ingest.DictEntry{
+			Canonical: e.Canonical,
+			Variants:  e.Variants,
+			Category:  e.Category,
+		}
+		if idx, ok := seen[key]; ok {
+			result[idx] = ie
+		} else {
+			seen[key] = len(result)
+			result = append(result, ie)
+		}
+	}
+	return result
 }

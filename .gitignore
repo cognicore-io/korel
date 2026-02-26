@@ -6,6 +6,9 @@
 /cmd/*/download-hn
 /cmd/*/download-arxiv
 /cmd/*/ai-chat
+/bootstrap
+/lexicon-usage
+/examples/*/lexicon-usage
 *.exe
 *.exe~
 *.dll
@@ -31,6 +34,7 @@ data/
 
 # Downloaded test data (keep config files: *.yaml, *.dict)
 testdata/*/docs.jsonl
+!testdata/integration/docs.jsonl
 
 # IDE & Editor
 .vscode/

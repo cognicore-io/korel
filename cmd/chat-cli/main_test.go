@@ -28,6 +28,7 @@ func TestChatCLIIntegration(t *testing.T) {
 		dbPath,
 		stoplist,
 		dict,
+		"",
 		taxonomy,
 		"",
 	)

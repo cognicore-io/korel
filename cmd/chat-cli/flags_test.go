@@ -19,7 +19,7 @@ func TestBuildEngine(t *testing.T) {
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 	rulesPath := ""
 
-	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, rulesPath)
+	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, rulesPath)
 	if err != nil {
 		t.Fatalf("buildEngine failed: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestBuildEngineNonExistentStoplist(t *testing.T) {
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, "")
+	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, "")
 	if err == nil {
 		t.Error("buildEngine should fail with non-existent stoplist")
 	}
@@ -56,7 +56,7 @@ func TestBuildEngineNonExistentDict(t *testing.T) {
 	dictPath := filepath.Join(tmpDir, "nonexistent.dict")
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, "")
+	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, "")
 	if err == nil {
 		t.Error("buildEngine should fail with non-existent dict")
 	}
@@ -72,7 +72,7 @@ func TestBuildEngineNonExistentTaxonomy(t *testing.T) {
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := filepath.Join(tmpDir, "nonexistent.yaml")
 
-	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, "")
+	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, "")
 	if err == nil {
 		t.Error("buildEngine should fail with non-existent taxonomy")
 	}
@@ -98,7 +98,7 @@ related_to(bert, nlp).
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, rulesPath)
+	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, rulesPath)
 	if err != nil {
 		t.Fatalf("buildEngine with rules failed: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestBuildEngineInvalidDBPath(t *testing.T) {
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, "")
+	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, "")
 	if err == nil {
 		t.Error("buildEngine should fail with invalid DB path")
 	}
@@ -142,7 +142,7 @@ func TestBuildEngineMalformedRules(t *testing.T) {
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, rulesPath)
+	_, _, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, rulesPath)
 	if err == nil {
 		t.Error("buildEngine should fail with malformed rules")
 	}
@@ -158,7 +158,7 @@ func TestExecuteQueryEmptyDB(t *testing.T) {
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, "")
+	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, "")
 	if err != nil {
 		t.Fatalf("buildEngine failed: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestExecuteQueryDifferentTopK(t *testing.T) {
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, "")
+	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, "")
 	if err != nil {
 		t.Fatalf("buildEngine failed: %v", err)
 	}
@@ -206,7 +206,7 @@ func TestExecuteQueryEmptyString(t *testing.T) {
 	dictPath := "../../testdata/hn/tokens.dict"
 	taxonomyPath := "../../testdata/hn/taxonomies.yaml"
 
-	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, taxonomyPath, "")
+	engine, cleanup, err := buildEngine(ctx, dbPath, stoplistPath, dictPath, "", taxonomyPath, "")
 	if err != nil {
 		t.Fatalf("buildEngine failed: %v", err)
 	}

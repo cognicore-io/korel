@@ -27,6 +27,7 @@ type Korel struct {
 	weights  ScoreWeights
 	halfLife float64
 	pmiCfg   pmi.Config
+	concepts map[string]struct{} // dictionary canonicals — used to filter PMI expansion
 }
 
 // ScoreWeights defines the weights for hybrid scoring
@@ -55,6 +56,7 @@ func New(opts Options) *Korel {
 	if cfg == (pmi.Config{}) {
 		cfg = pmi.DefaultConfig()
 	}
+	concepts := opts.Pipeline.KnownConcepts()
 	return &Korel{
 		store:    opts.Store,
 		pipeline: opts.Pipeline,
@@ -62,12 +64,67 @@ func New(opts Options) *Korel {
 		weights:  opts.Weights,
 		halfLife: opts.RecencyHalfLife,
 		pmiCfg:   cfg,
+		concepts: concepts,
 	}
 }
 
 // Close cleanly shuts down the Korel instance
 func (k *Korel) Close() error {
 	return k.store.Close()
+}
+
+// isConcept returns true if the token is a known dictionary concept.
+// Only dictionary terms (multi-token phrases and their canonicals) qualify.
+// This filters out noise words like "announced", "builds", "possible" that
+// happen to co-occur with query terms.
+func (k *Korel) isConcept(token string) bool {
+	_, ok := k.concepts[token]
+	return ok
+}
+
+// WarmInference populates the inference engine's fact graph from corpus PMI
+// statistics. Only dictionary concepts are added as facts — raw words are
+// filtered out. Call after batch ingest to enable transitive query expansion
+// (2-hop discovery: A↔B and B↔C means searching A finds C).
+func (k *Korel) WarmInference(ctx context.Context) error {
+	tokens, err := k.store.AllTokens(ctx)
+	if err != nil {
+		return err
+	}
+	for _, tok := range tokens {
+		if !k.isConcept(tok) {
+			continue // only build graph edges between known concepts
+		}
+		neighbors, err := k.store.TopNeighbors(ctx, tok, 10)
+		if err != nil {
+			continue
+		}
+		for _, nb := range neighbors {
+			if nb.PMI >= 0.3 && k.isConcept(nb.Token) {
+				k.inf.AddFact("related_to", tok, nb.Token)
+			}
+		}
+	}
+	return nil
+}
+
+// expandViaPMI uses corpus co-occurrence statistics to find tokens that are
+// statistically related to the query tokens. Only known dictionary concepts
+// pass the filter — random co-occurring words are discarded.
+func (k *Korel) expandViaPMI(ctx context.Context, queryTokens []string) []string {
+	var result []string
+	for _, tok := range queryTokens {
+		neighbors, err := k.store.TopNeighbors(ctx, tok, 10)
+		if err != nil {
+			continue
+		}
+		for _, nb := range neighbors {
+			if nb.PMI > 0.1 && k.isConcept(nb.Token) {
+				result = append(result, nb.Token)
+			}
+		}
+	}
+	return result
 }
 
 // RebuildPipeline constructs a new ingest pipeline from the store's current
@@ -147,6 +204,7 @@ func (k *Korel) Ingest(ctx context.Context, d IngestDoc) error {
 	doc := store.Doc{
 		URL:         d.URL,
 		Title:       d.Title,
+		BodySnippet: cards.ExtractSnippet(d.BodyText),
 		Outlet:      d.Outlet,
 		PublishedAt: d.PublishedAt,
 		Cats:        uniqueStrings(append(d.SourceCats, processed.Categories...)),
@@ -247,8 +305,13 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 	// Process query through pipeline
 	processed := k.pipeline.Process(req.Query)
 
-	// Expand via symbolic inference
-	expanded := uniqueStrings(append(processed.Tokens, k.inf.Expand(processed.Tokens)...))
+	// Expand via symbolic inference (uses fact graph populated by WarmInference)
+	inferExpanded := k.inf.Expand(processed.Tokens)
+	expanded := uniqueStrings(append(processed.Tokens, inferExpanded...))
+
+	// Expand via PMI co-occurrence statistics (corpus-driven discovery)
+	pmiExpanded := k.expandViaPMI(ctx, processed.Tokens)
+	expanded = uniqueStrings(append(expanded, pmiExpanded...))
 
 	if req.TopK <= 0 {
 		req.TopK = 3
@@ -258,7 +321,7 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 		return SearchResponse{}, nil
 	}
 
-	// Retrieve candidate documents
+	// Retrieve candidate documents (now includes PMI and inference neighbors)
 	docs, err := k.store.GetDocsByTokens(ctx, expanded, req.TopK*4)
 	if err != nil {
 		return SearchResponse{}, err
@@ -347,13 +410,14 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 	var response SearchResponse
 	for _, sdoc := range scoredDocs {
 		scored := cards.ScoredDoc{
-			DocID:     sdoc.doc.ID,
-			URL:       sdoc.doc.URL,
-			Title:     sdoc.doc.Title,
-			Time:      sdoc.doc.PublishedAt,
-			Tokens:    sdoc.doc.Tokens,
-			Cats:      sdoc.doc.Cats,
-			Breakdown: sdoc.breakdown,
+			DocID:       sdoc.doc.ID,
+			URL:         sdoc.doc.URL,
+			Title:       sdoc.doc.Title,
+			BodySnippet: sdoc.doc.BodySnippet,
+			Time:        sdoc.doc.PublishedAt,
+			Tokens:      sdoc.doc.Tokens,
+			Cats:        sdoc.doc.Cats,
+			Breakdown:   sdoc.breakdown,
 		}
 
 		card := builder.Build(sdoc.doc.Title, []cards.ScoredDoc{scored}, query, nil)

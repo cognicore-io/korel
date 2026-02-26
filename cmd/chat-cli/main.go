@@ -22,6 +22,7 @@ func main() {
 		dbPath       = flag.String("db", "", "Database path (required)")
 		stoplistPath = flag.String("stoplist", "", "Stoplist file (required)")
 		dictPath     = flag.String("dict", "", "Dictionary file (required)")
+		baseDictPath = flag.String("base-dict", "", "Base dictionary to merge (e.g., configs/base-tech.dict)")
 		taxonomyPath = flag.String("taxonomy", "", "Taxonomy file (required)")
 		rulesPath    = flag.String("rules", "", "Rules file (optional)")
 		query        = flag.String("query", "", "One-shot query (non-interactive mode)")
@@ -44,7 +45,7 @@ func main() {
 
 	ctx := context.Background()
 
-	engine, cleanup, err := buildEngine(ctx, *dbPath, *stoplistPath, *dictPath, *taxonomyPath, *rulesPath)
+	engine, cleanup, err := buildEngine(ctx, *dbPath, *stoplistPath, *dictPath, *baseDictPath, *taxonomyPath, *rulesPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -139,10 +140,11 @@ func executeQuery(ctx context.Context, engine *korel.Korel, query string, topK i
 	return nil
 }
 
-func buildEngine(ctx context.Context, dbPath, stoplistPath, dictPath, taxonomyPath, rulesPath string) (*korel.Korel, func(), error) {
+func buildEngine(ctx context.Context, dbPath, stoplistPath, dictPath, baseDictPath, taxonomyPath, rulesPath string) (*korel.Korel, func(), error) {
 	loader := config.Loader{
 		StoplistPath: stoplistPath,
 		DictPath:     dictPath,
+		BaseDictPath: baseDictPath,
 		TaxonomyPath: taxonomyPath,
 		RulesPath:    rulesPath,
 	}

@@ -22,6 +22,7 @@ import (
 	"github.com/cognicore/korel/pkg/korel/analytics"
 	reviewer "github.com/cognicore/korel/pkg/korel/autotune/review/llm"
 	"github.com/cognicore/korel/pkg/korel/autotune/stopwords"
+	"github.com/cognicore/korel/pkg/korel/config"
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/stoplist"
 )
@@ -215,6 +216,7 @@ func main() {
 		taxLLMBase       = flag.String("taxonomy-llm-base", "", "Optional taxonomy LLM base URL")
 		taxLLMModel      = flag.String("taxonomy-llm-model", "", "Optional taxonomy LLM model")
 		taxLLMKey        = flag.String("taxonomy-llm-api-key", "", "Optional taxonomy LLM API key")
+		baseDictPath     = flag.String("base-dict", "", "Base dictionary to merge with discovered pairs (e.g., configs/base-tech.dict)")
 	)
 	flag.Parse()
 
@@ -237,6 +239,10 @@ func main() {
 		log.Fatal("no documents found")
 	}
 
+	// Adjust thresholds for small corpora where PMI is unreliable
+	adjPairPMI, adjPairSupport, adjTaxPMI, adjTaxSupport := adjustThresholds(
+		len(items), *pairMinPMI, *pairMinSupport, *taxonomyMinPMI, *taxonomyMinSupport)
+
 	// Iterative refinement: discover stopwords, re-tokenize, repeat until convergence
 	// This improves quality by:
 	// 1. Removing stopword noise from token statistics (better DF/PMI)
@@ -255,14 +261,14 @@ func main() {
 	// Generate final outputs from converged analysis
 	stats := result.stats
 	suggestions := result.allStopwords
-	pairs := filterPairs(stats.TopPairs(*pairLimit*2, *pairMinPMI), int64(*pairMinSupport), limitInt(*pairLimit))
+	pairs := filterPairs(stats.TopPairs(*pairLimit*2, adjPairPMI), int64(adjPairSupport), limitInt(*pairLimit))
 	highDF := topHighDF(stats, 20)
 	synonymCandidates := generateSynonymCandidates(stats, int64(*synonymMinSupport), *synonymMinPMI, *synonymLimit)
 	taxonomyCategories := generateTaxonomy(ctx, stats, suggestions, *domain, *taxonomyLimit, taxonomyLLMConfig{
 		BaseURL: *taxLLMBase,
 		Model:   *taxLLMModel,
 		APIKey:  *taxLLMKey,
-	}, *taxonomyMinSupport, *taxonomyMinPMI, *taxonomyBlacklist, *requireTaxonomyLLM)
+	}, adjTaxSupport, adjTaxPMI, *taxonomyBlacklist, *requireTaxonomyLLM, len(items))
 
 	if err := writeStoplist(filepath.Join(*outDir, "stoplist.yaml"), suggestions); err != nil {
 		log.Fatalf("write stoplist: %v", err)
@@ -273,11 +279,12 @@ func main() {
 	if len(synonymCandidates) == 0 {
 		log.Printf("WARNING: No synonym candidates found. Corpus may be too small or thresholds too high.")
 	}
-	if err := writeTokens(filepath.Join(*outDir, "tokens.dict"), pairs, taxonomyCategories); err != nil {
+	if err := writeTokens(filepath.Join(*outDir, "tokens.dict"), pairs, taxonomyCategories, *baseDictPath); err != nil {
 		log.Fatalf("write tokens: %v", err)
 	}
-	if len(pairs) == 0 {
-		log.Printf("WARNING: No multi-token phrases found. Corpus may be too small (need 100+ docs for reliable PMI). tokens.dict is empty.")
+	if len(pairs) < 3 && len(items) >= 20 {
+		log.Printf("WARNING: Only %d multi-token phrases found from %d documents. "+
+			"Consider using --base-dict or providing more documents.", len(pairs), len(items))
 	}
 	if err := writeTaxonomy(filepath.Join(*outDir, "taxonomies.yaml"), taxonomyCategories); err != nil {
 		log.Fatalf("write taxonomy: %v", err)
@@ -376,12 +383,34 @@ func writeStoplist(path string, terms []string) error {
 	return os.WriteFile(path, buf, 0o644)
 }
 
-func writeTokens(path string, pairs []analytics.PairStat, taxonomy map[string][]string) error {
+func writeTokens(path string, pairs []analytics.PairStat, taxonomy map[string][]string, baseDictPath string) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
+
+	// Write base dictionary entries first if provided
+	discoveredCanonicals := make(map[string]struct{})
+	if baseDictPath != "" {
+		baseDict, err := config.LoadDict(baseDictPath)
+		if err != nil {
+			log.Printf("WARNING: Failed to load base dict %s: %v", baseDictPath, err)
+		} else {
+			fmt.Fprintf(f, "# Base dictionary entries from %s\n", filepath.Base(baseDictPath))
+			for _, e := range baseDict.Entries {
+				line := fmt.Sprintf("%s|%s\n", e.Canonical, e.Category)
+				if _, err := f.WriteString(line); err != nil {
+					return err
+				}
+				discoveredCanonicals[strings.ToLower(e.Canonical)] = struct{}{}
+			}
+			log.Printf("Merged %d base dictionary entries from %s", len(baseDict.Entries), baseDictPath)
+			if len(pairs) > 0 {
+				fmt.Fprintln(f, "\n# Discovered pairs from corpus")
+			}
+		}
+	}
 
 	// Build reverse lookup: token -> categories
 	tokenToCategories := make(map[string][]string)
@@ -393,6 +422,11 @@ func writeTokens(path string, pairs []analytics.PairStat, taxonomy map[string][]
 
 	for _, p := range pairs {
 		canonical := fmt.Sprintf("%s %s", p.A, p.B)
+
+		// Skip if already in base dict
+		if _, exists := discoveredCanonicals[strings.ToLower(canonical)]; exists {
+			continue
+		}
 
 		// Try to find best matching category for this pair
 		category := findBestCategory(p.A, p.B, tokenToCategories)
@@ -490,7 +524,7 @@ func topHighDF(stats analytics.Stats, limit int) []highDFEntry {
 	return out
 }
 
-func generateTaxonomy(ctx context.Context, stats analytics.Stats, stopwords []string, domain string, limit int, cfg taxonomyLLMConfig, minSupport int, minPMI float64, blacklistPath string, requireLLM bool) map[string][]string {
+func generateTaxonomy(ctx context.Context, stats analytics.Stats, stopwords []string, domain string, limit int, cfg taxonomyLLMConfig, minSupport int, minPMI float64, blacklistPath string, requireLLM bool, nDocs int) map[string][]string {
 	stopSet := make(map[string]struct{})
 	for _, tok := range stopwords {
 		stopSet[tok] = struct{}{}
@@ -505,7 +539,11 @@ func generateTaxonomy(ctx context.Context, stats analytics.Stats, stopwords []st
 		}
 	}
 
-	clusters := buildClusters(stats, stopSet, int64(minSupport), minPMI)
+	minClusterSize := 3
+	if nDocs < 200 {
+		minClusterSize = 2
+	}
+	clusters := buildClusters(stats, stopSet, int64(minSupport), minPMI, minClusterSize)
 	if len(clusters) == 0 {
 		if requireLLM {
 			log.Fatal("FATAL: No semantic clusters found and --require-taxonomy-llm is set. " +
@@ -530,7 +568,7 @@ func generateTaxonomy(ctx context.Context, stats analytics.Stats, stopwords []st
 	return result
 }
 
-func buildClusters(stats analytics.Stats, stopwords map[string]struct{}, minSupport int64, minPMI float64) [][]string {
+func buildClusters(stats analytics.Stats, stopwords map[string]struct{}, minSupport int64, minPMI float64, minClusterSize int) [][]string {
 	pairs := stats.TopPairs(200, minPMI)
 	graph := make(map[string]map[string]struct{})
 	addEdge := func(a, b string) {
@@ -572,7 +610,7 @@ func buildClusters(stats analytics.Stats, stopwords map[string]struct{}, minSupp
 				}
 			}
 		}
-		if len(cluster) >= 3 {
+		if len(cluster) >= minClusterSize {
 			clusters = append(clusters, cluster)
 		}
 	}
@@ -626,10 +664,34 @@ func extractKeywords(stats analytics.Stats, stopwords map[string]struct{}, gener
 			"mar": {}, "apr": {}, "may": {}, "jun": {}, "jul": {}, "aug": {}, "sep": {}, "oct": {},
 		}
 	}
+	// Add common near-stopwords that leak through small corpora
+	for _, w := range []string{
+		"using", "get", "make", "like", "see", "would", "also", "just",
+		"much", "well", "really", "used", "let", "use", "want", "going",
+		"things", "thing", "way", "lot", "time", "long", "take", "work",
+		"need", "know", "think", "made", "back", "still", "even", "good",
+		"one", "two", "ve", "don", "doesn", "didn", "won", "got", "put",
+		"set", "come", "said", "went", "keep", "find", "give", "tell",
+		"many", "look", "right", "years", "year", "day", "days", "people",
+		"part", "able", "something", "every", "actually", "pretty", "quite",
+		"already", "best", "better", "happy", "answer", "questions",
+	} {
+		genericTerms[w] = struct{}{}
+	}
 
+	// Determine DF bounds — tighter for small corpora
+	maxDF := 60.0
+	if stats.TotalDocs < 200 {
+		maxDF = 40.0
+	}
+
+	type scored struct {
+		token string
+		score float64
+	}
 	entries := stats.StopwordStats()
 	seen := make(map[string]struct{})
-	var words []string
+	var candidates []scored
 
 	for _, entry := range entries {
 		tok := strings.ToLower(entry.Token)
@@ -645,7 +707,7 @@ func extractKeywords(stats analytics.Stats, stopwords map[string]struct{}, gener
 		}
 
 		// Skip by DF percentage
-		if entry.DFPercent < 2 || entry.DFPercent > 60 {
+		if entry.DFPercent < 2 || entry.DFPercent > maxDF {
 			continue
 		}
 
@@ -681,7 +743,19 @@ func extractKeywords(stats analytics.Stats, stopwords map[string]struct{}, gener
 		}
 		seen[cleaned] = struct{}{}
 
-		words = append(words, cleaned)
+		// Quality score: peaks at moderate DF (not too rare, not too common)
+		qScore := entry.DFPercent * (1 - entry.DFPercent/100)
+		candidates = append(candidates, scored{token: cleaned, score: qScore})
+	}
+
+	// Sort by quality score descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].score > candidates[j].score
+	})
+
+	var words []string
+	for _, c := range candidates {
+		words = append(words, c.token)
 		if limit > 0 && len(words) >= limit {
 			break
 		}
@@ -882,4 +956,34 @@ func writeSynonyms(path string, candidates []synonymCandidate) error {
 		"# - Remove unrelated pairs that happen to share context\n\n")
 
 	return os.WriteFile(path, append(header, buf...), 0o644)
+}
+
+// adjustThresholds scales PMI and support thresholds for small corpora where
+// statistical measures are unreliable. Linear scaling between 30% (at <=50 docs)
+// and 100% (at >=500 docs).
+func adjustThresholds(nDocs int, pairMinPMI float64, pairMinSupport int,
+	taxMinPMI float64, taxMinSupport int) (float64, int, float64, int) {
+	if nDocs >= 500 {
+		return pairMinPMI, pairMinSupport, taxMinPMI, taxMinSupport
+	}
+	scale := float64(nDocs) / 500.0
+	if scale < 0.3 {
+		scale = 0.3
+	}
+	adjPairPMI := pairMinPMI * scale
+	adjPairSupport := int(float64(pairMinSupport) * scale)
+	if adjPairSupport < 2 {
+		adjPairSupport = 2
+	}
+	adjTaxPMI := taxMinPMI * scale
+	adjTaxSupport := int(float64(taxMinSupport) * scale)
+	if adjTaxSupport < 2 {
+		adjTaxSupport = 2
+	}
+
+	log.Printf("Small corpus (%d docs): adjusted thresholds — pairPMI=%.2f→%.2f, "+
+		"pairSupport=%d→%d, taxPMI=%.2f→%.2f, taxSupport=%d→%d",
+		nDocs, pairMinPMI, adjPairPMI, pairMinSupport, adjPairSupport,
+		taxMinPMI, adjTaxPMI, taxMinSupport, adjTaxSupport)
+	return adjPairPMI, adjPairSupport, adjTaxPMI, adjTaxSupport
 }

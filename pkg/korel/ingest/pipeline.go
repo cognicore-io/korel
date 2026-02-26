@@ -24,6 +24,11 @@ type ProcessedDoc struct {
 	Entities   []Entity
 }
 
+// KnownConcepts returns the set of canonical dictionary terms.
+func (p *Pipeline) KnownConcepts() map[string]struct{} {
+	return p.parser.KnownConcepts()
+}
+
 // Process runs a document through the full ingestion pipeline
 func (p *Pipeline) Process(text string) ProcessedDoc {
 	// 1. Tokenize (remove stopwords, normalize case)

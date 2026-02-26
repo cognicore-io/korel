@@ -53,6 +53,10 @@ func OpenSQLite(ctx context.Context, path string, cfg ...pmi.Config) (store.Stor
 		db.Close()
 		return nil, err
 	}
+	if err := migrateSchema(ctx, db); err != nil {
+		db.Close()
+		return nil, err
+	}
 
 	return &sqliteStore{
 		db:     db,
@@ -161,6 +165,23 @@ CREATE TABLE IF NOT EXISTS taxonomy_entities (
 	return err
 }
 
+// migrateSchema adds columns introduced after the initial schema.
+func migrateSchema(ctx context.Context, db *sql.DB) error {
+	var count int
+	err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM pragma_table_info('docs') WHERE name='body_snippet'`).Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		_, err = db.ExecContext(ctx, `ALTER TABLE docs ADD COLUMN body_snippet TEXT DEFAULT ''`)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // UpsertDoc inserts or updates a document
 func (s *sqliteStore) UpsertDoc(ctx context.Context, d store.Doc) error {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -170,10 +191,11 @@ func (s *sqliteStore) UpsertDoc(ctx context.Context, d store.Doc) error {
 	defer tx.Rollback()
 
 	const stmt = `
-INSERT INTO docs (url, title, outlet, published_at, links_out)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO docs (url, title, body_snippet, outlet, published_at, links_out)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(url) DO UPDATE SET
 	title=excluded.title,
+	body_snippet=excluded.body_snippet,
 	outlet=excluded.outlet,
 	published_at=excluded.published_at,
 	links_out=excluded.links_out
@@ -186,6 +208,7 @@ RETURNING id;
 		stmt,
 		d.URL,
 		d.Title,
+		d.BodySnippet,
 		d.Outlet,
 		d.PublishedAt.UTC().Format(time.RFC3339),
 		d.LinksOut,
@@ -509,6 +532,25 @@ WHERE t1 = ? OR t2 = ?;
 	return neighbors, nil
 }
 
+// AllTokens returns all distinct tokens in the corpus.
+func (s *sqliteStore) AllTokens(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT token FROM doc_tokens`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tokens []string
+	for rows.Next() {
+		var tok string
+		if err := rows.Scan(&tok); err != nil {
+			return nil, err
+		}
+		tokens = append(tokens, tok)
+	}
+	return tokens, rows.Err()
+}
+
 // UpsertCard inserts or updates a card
 func (s *sqliteStore) UpsertCard(ctx context.Context, c store.Card) error {
 	bulletsJSON, err := json.Marshal(c.Bullets)
@@ -808,10 +850,10 @@ func (s *sqliteStore) loadDoc(ctx context.Context, id int64) (store.Doc, error) 
 		published string
 	)
 	err := s.db.QueryRowContext(ctx, `
-SELECT id, url, title, outlet, published_at, links_out
+SELECT id, url, title, COALESCE(body_snippet, ''), outlet, published_at, links_out
 FROM docs
 WHERE id = ?;
-`, id).Scan(&doc.ID, &doc.URL, &doc.Title, &doc.Outlet, &published, &doc.LinksOut)
+`, id).Scan(&doc.ID, &doc.URL, &doc.Title, &doc.BodySnippet, &doc.Outlet, &published, &doc.LinksOut)
 	if err != nil {
 		return store.Doc{}, err
 	}

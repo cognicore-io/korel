@@ -22,6 +22,7 @@ type Store interface {
 	DecPair(ctx context.Context, t1, t2 string) error
 	GetPMI(ctx context.Context, t1, t2 string) (float64, bool, error)
 	TopNeighbors(ctx context.Context, token string, k int) ([]Neighbor, error)
+	AllTokens(ctx context.Context) ([]string, error)
 
 	// Cards
 	UpsertCard(ctx context.Context, c Card) error
@@ -42,6 +43,7 @@ type Doc struct {
 	ID          int64
 	URL         string
 	Title       string
+	BodySnippet string // First ~500 chars of body text for card generation
 	Outlet      string
 	PublishedAt time.Time
 	Cats        []string

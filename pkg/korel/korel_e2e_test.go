@@ -402,6 +402,19 @@ func (m *mockStoreForE2E) UpsertStoplist(ctx context.Context, tokens []string) e
 func (m *mockStoreForE2E) UpsertDictEntry(ctx context.Context, phrase, canonical, category string) error {
 	return nil
 }
+func (m *mockStoreForE2E) AllTokens(ctx context.Context) ([]string, error) {
+	seen := make(map[string]struct{})
+	for _, d := range m.docs {
+		for _, t := range d.Tokens {
+			seen[t] = struct{}{}
+		}
+	}
+	tokens := make([]string, 0, len(seen))
+	for t := range seen {
+		tokens = append(tokens, t)
+	}
+	return tokens, nil
+}
 
 // queryStoreAdapter adapts store.Store to query.Store interface
 type queryStoreAdapter struct {

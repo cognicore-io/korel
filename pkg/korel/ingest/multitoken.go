@@ -80,6 +80,16 @@ func (p *MultiTokenParser) Parse(tokens []string) []string {
 	return result
 }
 
+// KnownConcepts returns the set of canonical dictionary forms.
+// Used to filter PMI expansion to meaningful concepts only.
+func (p *MultiTokenParser) KnownConcepts() map[string]struct{} {
+	concepts := make(map[string]struct{})
+	for _, entry := range p.dict {
+		concepts[strings.ToLower(entry.Canonical)] = struct{}{}
+	}
+	return concepts
+}
+
 func phraseLen(phrase string) int {
 	if phrase == "" {
 		return 1

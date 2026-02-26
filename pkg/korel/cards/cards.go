@@ -46,13 +46,14 @@ type Explain struct {
 
 // ScoredDoc represents a document with its score
 type ScoredDoc struct {
-	DocID     int64
-	URL       string
-	Title     string
-	Time      time.Time
-	Tokens    []string
-	Cats      []string
-	Breakdown rank.ScoreBreakdown
+	DocID       int64
+	URL         string
+	Title       string
+	BodySnippet string
+	Time        time.Time
+	Tokens      []string
+	Cats        []string
+	Breakdown   rank.ScoreBreakdown
 }
 
 // Build creates a card from top-ranked documents
@@ -80,8 +81,7 @@ func (b *Builder) Build(title string, docs []ScoredDoc, query rank.Query, topPai
 	}
 
 	for _, doc := range docs {
-		// Extract bullet (simplified: use title)
-		card.Bullets = append(card.Bullets, doc.Title)
+		card.Bullets = append(card.Bullets, generateBullet(doc, queryTokenSet))
 
 		// Add source reference
 		card.Sources = append(card.Sources, SourceRef{

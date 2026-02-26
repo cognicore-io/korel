@@ -58,6 +58,7 @@ func (f *fakeStore) GetPMI(ctx context.Context, t1, t2 string) (float64, bool, e
 func (f *fakeStore) TopNeighbors(ctx context.Context, token string, k int) ([]store.Neighbor, error) {
 	return nil, nil
 }
+func (f *fakeStore) AllTokens(ctx context.Context) ([]string, error) { return nil, nil }
 func (f *fakeStore) UpsertCard(ctx context.Context, c store.Card) error          { return nil }
 func (f *fakeStore) GetCardsByPeriod(ctx context.Context, period string, k int) ([]store.Card, error) {
 	return nil, nil

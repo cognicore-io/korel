@@ -19,6 +19,22 @@ func DefaultConfig() Config {
 	}
 }
 
+// ConfigForCorpusSize returns a PMI configuration with MinDF scaled for the
+// given corpus size. Small corpora need lower MinDF thresholds or TopNeighbors
+// filters out nearly everything.
+func ConfigForCorpusSize(nDocs int) Config {
+	cfg := DefaultConfig()
+	switch {
+	case nDocs < 50:
+		cfg.MinDF = 1
+	case nDocs < 200:
+		cfg.MinDF = 2
+	case nDocs < 500:
+		cfg.MinDF = 3
+	}
+	return cfg
+}
+
 // Calculator handles PMI (Pointwise Mutual Information) calculations
 type Calculator struct {
 	epsilon float64 // smoothing constant

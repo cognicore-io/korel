@@ -428,6 +428,18 @@ func (s *Store) TopNeighbors(ctx context.Context, token string, k int) ([]store.
 	return neighbors, nil
 }
 
+// AllTokens returns all distinct tokens in the corpus.
+func (s *Store) AllTokens(_ context.Context) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tokens := make([]string, 0, len(s.tokenDF))
+	for tok := range s.tokenDF {
+		tokens = append(tokens, tok)
+	}
+	return tokens, nil
+}
+
 // rebuildNeighborsLocked rebuilds the adjacency index from pairCounts.
 // Uses integer keys to avoid string hashing entirely during rebuild.
 // Caller must hold s.mu write lock.
@@ -720,6 +732,7 @@ func copyDoc(d store.Doc) store.Doc {
 		ID:          d.ID,
 		URL:         d.URL,
 		Title:       d.Title,
+		BodySnippet: d.BodySnippet,
 		Outlet:      d.Outlet,
 		PublishedAt: d.PublishedAt,
 		Cats:        copySlice(d.Cats),
