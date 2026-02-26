@@ -472,3 +472,114 @@ func TestDampingFactor_UnknownToken(t *testing.T) {
 		t.Errorf("unknown token should get dampingFactor=1.0, got %.3f", f)
 	}
 }
+
+func TestTaxonomyDrift_LowCoverage(t *testing.T) {
+	a := NewAnalyzer()
+	// 10 docs tagged "ai" containing "machine"
+	for i := 0; i < 10; i++ {
+		a.Process([]string{"machine", "learning"}, []string{"ai"})
+	}
+	// 10 docs tagged "ai" without "obsolete"
+	for i := 0; i < 10; i++ {
+		a.Process([]string{"deep", "neural"}, []string{"ai"})
+	}
+	stats := a.Snapshot()
+
+	taxonomy := map[string][]string{
+		"ai": {"machine", "obsolete"},
+	}
+	drift := stats.TaxonomyDrift(taxonomy)
+
+	// Find drift for "obsolete" — should have low coverage
+	var found bool
+	for _, d := range drift {
+		if d.Keyword == "obsolete" && d.Type == "low_coverage" {
+			found = true
+			if d.Coverage != 0 {
+				t.Errorf("obsolete should have 0 coverage, got %f", d.Coverage)
+			}
+			if d.MissedDocs == 0 {
+				t.Error("obsolete should have missed docs > 0")
+			}
+		}
+	}
+	if !found {
+		t.Error("expected low_coverage drift for 'obsolete'")
+	}
+
+	// "machine" should have reasonable coverage
+	for _, d := range drift {
+		if d.Keyword == "machine" && d.Type == "low_coverage" {
+			if d.Coverage == 0 {
+				t.Error("machine should have non-zero coverage")
+			}
+		}
+	}
+}
+
+func TestTaxonomyDrift_OrphanDetection(t *testing.T) {
+	a := NewAnalyzer()
+	// Create a corpus where "kubernetes" appears in >5% of docs but is not in taxonomy
+	for i := 0; i < 20; i++ {
+		a.Process([]string{"kubernetes", "deploy"}, []string{"tech"})
+	}
+	// Pad with other docs so kubernetes = 20/30 = 66% DF
+	for i := 0; i < 10; i++ {
+		a.Process([]string{"python", "code"}, []string{"programming"})
+	}
+	stats := a.Snapshot()
+
+	taxonomy := map[string][]string{
+		"tech":        {"docker", "cloud"},
+		"programming": {"python", "code"},
+	}
+	drift := stats.TaxonomyDrift(taxonomy)
+
+	// "kubernetes" should be detected as orphan
+	var orphanFound bool
+	for _, d := range drift {
+		if d.Keyword == "kubernetes" && d.Type == "orphan" {
+			orphanFound = true
+			if d.SupportDocs != 20 {
+				t.Errorf("kubernetes support should be 20, got %d", d.SupportDocs)
+			}
+			if d.Category != "tech" {
+				t.Errorf("kubernetes best category should be 'tech', got %q", d.Category)
+			}
+		}
+	}
+	if !orphanFound {
+		t.Error("expected orphan detection for 'kubernetes'")
+	}
+
+	// "python" and "code" are in taxonomy — should NOT be orphans
+	for _, d := range drift {
+		if (d.Keyword == "python" || d.Keyword == "code") && d.Type == "orphan" {
+			t.Errorf("taxonomy keyword %q should not be an orphan", d.Keyword)
+		}
+	}
+}
+
+func TestTaxonomyDrift_EmptyTaxonomy(t *testing.T) {
+	a := NewAnalyzer()
+	a.Process([]string{"test"}, []string{"cat"})
+	stats := a.Snapshot()
+
+	drift := stats.TaxonomyDrift(nil)
+	if drift != nil {
+		t.Errorf("empty taxonomy should return nil, got %d results", len(drift))
+	}
+
+	drift = stats.TaxonomyDrift(map[string][]string{})
+	if drift != nil {
+		t.Errorf("empty taxonomy map should return nil, got %d results", len(drift))
+	}
+}
+
+func TestTaxonomyDrift_NoDocs(t *testing.T) {
+	stats := Stats{}
+	drift := stats.TaxonomyDrift(map[string][]string{"ai": {"ml"}})
+	if drift != nil {
+		t.Errorf("zero docs should return nil, got %d results", len(drift))
+	}
+}

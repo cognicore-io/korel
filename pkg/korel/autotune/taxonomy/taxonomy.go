@@ -6,17 +6,25 @@ import (
 	"math"
 )
 
+// Drift type constants.
+const (
+	DriftLowCoverage = "low_coverage" // existing keyword losing relevance
+	DriftOrphan      = "orphan"       // high-DF token not in any category
+)
+
 // DriftStats captures analytics for category keyword coverage/usage.
 type DriftStats struct {
-	Category    string
+	Type        string  // DriftLowCoverage or DriftOrphan
+	Category    string  // for low_coverage: which category; for orphan: suggested category or ""
 	Keyword     string
 	SupportDocs int64   // number of docs where keyword appears
 	MissedDocs  int64   // docs tagged with category but missing keyword
-	Coverage    float64 // % of category docs containing keyword
+	Coverage    float64 // % of category docs containing keyword (0 for orphans)
 }
 
 // Suggestion represents a proposed keyword addition or boost.
 type Suggestion struct {
+	Type       string // DriftLowCoverage or DriftOrphan
 	Category   string
 	Keyword    string
 	Confidence float64
@@ -37,6 +45,7 @@ type Reviewer interface {
 type Thresholds struct {
 	MinCoverage    float64 // e.g. 0.3 (30% coverage)
 	MinMissedDocs  int64   // e.g. 20 docs lacking the keyword
+	MinOrphanDF    float64 // minimum DF% for orphan tokens (e.g. 0.05 = 5%)
 	ConfidenceBias float64 // default boost for confidence
 }
 
@@ -60,19 +69,35 @@ func (t *AutoTuner) Run(ctx context.Context) ([]Suggestion, error) {
 	thresholds := t.thresholdsOrDefault()
 	var suggestions []Suggestion
 	for _, stat := range stats {
-		if stat.Coverage >= thresholds.MinCoverage {
-			continue
+		switch stat.Type {
+		case DriftOrphan:
+			if stat.SupportDocs == 0 {
+				continue
+			}
+			confidence := t.computeOrphanConfidence(stat, thresholds)
+			suggestions = append(suggestions, Suggestion{
+				Type:       DriftOrphan,
+				Category:   stat.Category,
+				Keyword:    stat.Keyword,
+				Confidence: confidence,
+				MissedDocs: stat.SupportDocs, // for orphans, support = docs it appears in
+			})
+		default: // DriftLowCoverage
+			if stat.Coverage >= thresholds.MinCoverage {
+				continue
+			}
+			if stat.MissedDocs < thresholds.MinMissedDocs {
+				continue
+			}
+			confidence := t.computeConfidence(stat, thresholds)
+			suggestions = append(suggestions, Suggestion{
+				Type:       DriftLowCoverage,
+				Category:   stat.Category,
+				Keyword:    stat.Keyword,
+				Confidence: confidence,
+				MissedDocs: stat.MissedDocs,
+			})
 		}
-		if stat.MissedDocs < thresholds.MinMissedDocs {
-			continue
-		}
-		confidence := t.computeConfidence(stat, thresholds)
-		suggestions = append(suggestions, Suggestion{
-			Category:   stat.Category,
-			Keyword:    stat.Keyword,
-			Confidence: confidence,
-			MissedDocs: stat.MissedDocs,
-		})
 	}
 
 	if t.Reviewer == nil {
@@ -100,6 +125,9 @@ func (t *AutoTuner) thresholdsOrDefault() Thresholds {
 	if th.MinMissedDocs == 0 {
 		th.MinMissedDocs = 10
 	}
+	if th.MinOrphanDF == 0 {
+		th.MinOrphanDF = 0.05
+	}
 	if th.ConfidenceBias == 0 {
 		th.ConfidenceBias = 0.2
 	}
@@ -108,13 +136,27 @@ func (t *AutoTuner) thresholdsOrDefault() Thresholds {
 
 func (t *AutoTuner) computeConfidence(stat DriftStats, th Thresholds) float64 {
 	missedComponent := 1 - math.Exp(-float64(stat.MissedDocs)/float64(th.MinMissedDocs))
-	coverageComponent := 1 - stat.Coverage // more missing coverage => higher urgency
+	coverageComponent := 1 - stat.Coverage
 	confidence := th.ConfidenceBias + 0.5*missedComponent + 0.5*coverageComponent
 	if confidence > 1 {
 		confidence = 1
 	}
 	if confidence < 0 {
 		confidence = 0
+	}
+	return confidence
+}
+
+func (t *AutoTuner) computeOrphanConfidence(stat DriftStats, th Thresholds) float64 {
+	// Orphan confidence: higher DF → more confident it's a real topic.
+	// Coverage field stores DF% for orphans.
+	dfComponent := 1 - math.Exp(-stat.Coverage/th.MinOrphanDF)
+	confidence := th.ConfidenceBias + 0.8*dfComponent
+	if stat.Category != "" {
+		confidence += 0.1 // bonus for having a suggested category
+	}
+	if confidence > 1 {
+		confidence = 1
 	}
 	return confidence
 }

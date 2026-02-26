@@ -7,6 +7,7 @@ import (
 	"sort"
 	"sync"
 
+	taxdrift "github.com/cognicore/korel/pkg/korel/autotune/taxonomy"
 	"github.com/cognicore/korel/pkg/korel/pmi"
 	"github.com/cognicore/korel/pkg/korel/signals"
 	"github.com/cognicore/korel/pkg/korel/stoplist"
@@ -728,6 +729,94 @@ type HighPMIPair struct {
 // HighPMIPairs returns all document-level co-occurrence pairs with their PMI scores.
 func (s *Stats) HighPMIPairs() []HighPMIPair {
 	return s.ComputeAll().HighPMIPairs
+}
+
+// TaxonomyDrift computes drift statistics by comparing corpus token frequencies
+// against the provided taxonomy. Returns two kinds of drift:
+//   - low_coverage: keywords in the taxonomy that rarely/never appear in the corpus
+//   - orphan: high-DF tokens not assigned to any taxonomy category
+//
+// The taxonomy parameter maps category name → keyword list (flattened from sectors/events/regions).
+// The stopwords parameter lists tokens to exclude from orphan detection (already identified as noise).
+func (s *Stats) TaxonomyDrift(taxonomy map[string][]string, stopwords ...[]string) []taxdrift.DriftStats {
+	if s.TotalDocs == 0 || len(taxonomy) == 0 {
+		return nil
+	}
+
+	// Build reverse index: keyword → set of categories it belongs to.
+	keywordCats := make(map[string]map[string]struct{})
+	for cat, keywords := range taxonomy {
+		for _, kw := range keywords {
+			if keywordCats[kw] == nil {
+				keywordCats[kw] = make(map[string]struct{})
+			}
+			keywordCats[kw][cat] = struct{}{}
+		}
+	}
+
+	// Build stopword set for orphan filtering.
+	stopSet := make(map[string]struct{})
+	for _, sw := range stopwords {
+		for _, tok := range sw {
+			stopSet[tok] = struct{}{}
+		}
+	}
+
+	var results []taxdrift.DriftStats
+
+	// Low-coverage detection: check whether each taxonomy keyword appears in the corpus.
+	// Uses TokenDF (document frequency) which works regardless of category assignment.
+	for cat, keywords := range taxonomy {
+		for _, kw := range keywords {
+			kwDocs := s.TokenDF[kw]
+			coverage := float64(kwDocs) / float64(s.TotalDocs)
+			missed := s.TotalDocs - kwDocs
+			results = append(results, taxdrift.DriftStats{
+				Type:        taxdrift.DriftLowCoverage,
+				Category:    cat,
+				Keyword:     kw,
+				SupportDocs: kwDocs,
+				MissedDocs:  missed,
+				Coverage:    coverage,
+			})
+		}
+	}
+
+	// Orphan detection: find high-DF tokens not in any taxonomy category.
+	// Excludes stopwords (already identified as noise by the stopword detector).
+	dfThreshold := float64(s.TotalDocs) * 0.05
+	for tok, df := range s.TokenDF {
+		if _, inTaxonomy := keywordCats[tok]; inTaxonomy {
+			continue
+		}
+		if _, isStop := stopSet[tok]; isStop {
+			continue
+		}
+		if float64(df) < dfThreshold {
+			continue
+		}
+		// Find best category match from TokenCats (category co-occurrence).
+		bestCat := ""
+		var bestCount int64
+		if cats, ok := s.TokenCats[tok]; ok {
+			for cat, count := range cats {
+				if count > bestCount {
+					bestCount = count
+					bestCat = cat
+				}
+			}
+		}
+		dfPercent := float64(df) / float64(s.TotalDocs)
+		results = append(results, taxdrift.DriftStats{
+			Type:        taxdrift.DriftOrphan,
+			Category:    bestCat,
+			Keyword:     tok,
+			SupportDocs: df,
+			Coverage:    dfPercent, // DF% stored in Coverage for orphan confidence computation
+		})
+	}
+
+	return results
 }
 
 // PairStat describes combined metrics for a token pair.

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cognicore/korel/pkg/korel/autotune/taxonomy"
 	"github.com/cognicore/korel/pkg/korel/inference/simple"
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/store/memstore"
@@ -189,5 +190,93 @@ func assertPairExists(t *testing.T, ctx context.Context, k *Korel, a, b string, 
 	}
 	if ok != expected {
 		t.Fatalf("pair (%s,%s) existence = %v, expected %v", a, b, ok, expected)
+	}
+}
+
+func TestAutoTuneTaxonomyDrift(t *testing.T) {
+	ctx := context.Background()
+
+	ms := memstore.New()
+	defer ms.Close()
+
+	// Set up a taxonomy with "animals" category containing "cat" (relevant)
+	// and "dinosaur" (irrelevant — won't appear in corpus).
+	ms.SetTaxonomy(
+		map[string][]string{
+			"animals": {"cat", "dog", "dinosaur"},
+		},
+		nil, nil, nil,
+	)
+
+	tax := ingest.NewTaxonomy()
+	tax.AddSector("animals", []string{"cat", "dog", "dinosaur"})
+
+	pipeline := ingest.NewPipeline(
+		ingest.NewTokenizer(nil),
+		ingest.NewMultiTokenParser(nil),
+		tax,
+	)
+
+	engine := New(Options{
+		Store:           ms,
+		Pipeline:        pipeline,
+		Inference:       simple.New(),
+		Weights:         ScoreWeights{AlphaPMI: 1},
+		RecencyHalfLife: 14,
+	})
+	defer engine.Close()
+
+	// Corpus: "cat" and "dog" appear frequently, "dinosaur" never,
+	// "robot" appears often but isn't in any taxonomy category (orphan).
+	corpus := make([]string, 0, 30)
+	for i := 0; i < 10; i++ {
+		corpus = append(corpus, "the cat chased the mouse around the garden")
+	}
+	for i := 0; i < 10; i++ {
+		corpus = append(corpus, "the dog fetched the ball in the yard")
+	}
+	for i := 0; i < 10; i++ {
+		corpus = append(corpus, "the robot built the machine in the factory")
+	}
+
+	result, err := engine.AutoTune(ctx, corpus, &AutoTuneOptions{
+		MaxIterations: 2,
+		Thresholds:    AutoTuneDefaults(),
+	})
+	if err != nil {
+		t.Fatalf("AutoTune: %v", err)
+	}
+
+	if len(result.TaxonomySuggestions) == 0 {
+		t.Fatal("expected taxonomy suggestions")
+	}
+
+	// Check for low-coverage suggestion for "dinosaur".
+	var foundDinosaur bool
+	for _, s := range result.TaxonomySuggestions {
+		if s.Keyword == "dinosaur" && s.Type == taxonomy.DriftLowCoverage {
+			foundDinosaur = true
+			if s.Category != "animals" {
+				t.Errorf("dinosaur should be in 'animals' category, got %q", s.Category)
+			}
+		}
+	}
+	if !foundDinosaur {
+		t.Error("expected low_coverage suggestion for 'dinosaur'")
+	}
+
+	// Check for orphan suggestion for "robot".
+	var foundRobot bool
+	for _, s := range result.TaxonomySuggestions {
+		if s.Keyword == "robot" && s.Type == taxonomy.DriftOrphan {
+			foundRobot = true
+		}
+	}
+	if !foundRobot {
+		// Log all suggestions for debugging.
+		for _, s := range result.TaxonomySuggestions {
+			t.Logf("suggestion: type=%s cat=%s kw=%s conf=%.2f", s.Type, s.Category, s.Keyword, s.Confidence)
+		}
+		t.Error("expected orphan suggestion for 'robot'")
 	}
 }

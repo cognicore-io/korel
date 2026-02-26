@@ -8,6 +8,7 @@ import (
 	"github.com/cognicore/korel/pkg/korel/analytics"
 	"github.com/cognicore/korel/pkg/korel/autotune/rules"
 	"github.com/cognicore/korel/pkg/korel/autotune/stopwords"
+	"github.com/cognicore/korel/pkg/korel/autotune/taxonomy"
 	"github.com/cognicore/korel/pkg/korel/cards"
 	"github.com/cognicore/korel/pkg/korel/inference"
 	"github.com/cognicore/korel/pkg/korel/ingest"
@@ -481,9 +482,10 @@ func uniqueStrings(in []string) []string {
 
 // AutoTuneResult contains suggestions from corpus analysis.
 type AutoTuneResult struct {
-	StopwordCandidates []stoplist.Candidate // cumulative from all iterations
-	RuleSuggestions    []rules.Suggestion   // from final iteration stats
-	Iterations         []AutoTuneIteration  // per-round details
+	StopwordCandidates  []stoplist.Candidate  // cumulative from all iterations
+	RuleSuggestions     []rules.Suggestion    // from final iteration stats
+	TaxonomySuggestions []taxonomy.Suggestion // taxonomy drift suggestions (not auto-persisted)
+	Iterations          []AutoTuneIteration   // per-round details
 }
 
 // AutoTuneIteration tracks one round of iterative autotune.
@@ -658,7 +660,39 @@ func (k *Korel) AutoTune(ctx context.Context, texts []string, opts *AutoTuneOpti
 		}
 	}
 
+	// Taxonomy drift detection: compare corpus stats against current taxonomy.
+	// Pass discovered stopwords so they don't appear as orphan candidates.
+	if taxView := k.store.Taxonomy(); taxView != nil {
+		flatTax := flattenTaxonomy(taxView)
+		if len(flatTax) > 0 {
+			driftStats := finalStats.TaxonomyDrift(flatTax, allStops)
+			taxTuner := taxonomy.AutoTuner{
+				Provider: &precomputedDriftProvider{stats: driftStats},
+			}
+			taxSuggestions, err := taxTuner.Run(ctx)
+			if err != nil {
+				return result, err
+			}
+			result.TaxonomySuggestions = taxSuggestions
+		}
+	}
+
 	return result, nil
+}
+
+// flattenTaxonomy merges sectors, events, and regions into a single map.
+func flattenTaxonomy(tv store.TaxonomyView) map[string][]string {
+	flat := make(map[string][]string)
+	for cat, keywords := range tv.AllSectors() {
+		flat[cat] = append(flat[cat], keywords...)
+	}
+	for cat, keywords := range tv.AllEvents() {
+		flat[cat] = append(flat[cat], keywords...)
+	}
+	for cat, keywords := range tv.AllRegions() {
+		flat[cat] = append(flat[cat], keywords...)
+	}
+	return flat
 }
 
 // precomputedStopProvider implements stopwords.StatsProvider with pre-computed data.
@@ -686,6 +720,15 @@ func (p *precomputedRuleProvider) HighPMIPairs(ctx context.Context) ([]rules.Pai
 		}
 	}
 	return out, nil
+}
+
+// precomputedDriftProvider implements taxonomy.StatsProvider with pre-computed data.
+type precomputedDriftProvider struct {
+	stats []taxonomy.DriftStats
+}
+
+func (p *precomputedDriftProvider) TaxonomyDrift(ctx context.Context) ([]taxonomy.DriftStats, error) {
+	return p.stats, nil
 }
 
 // batchPairStore is an optional interface for stores that support batch pair operations.

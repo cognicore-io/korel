@@ -29,8 +29,8 @@ func (f fakeReviewer) ApproveTaxonomy(ctx context.Context, sugg Suggestion) (boo
 
 func TestAutoTunerTaxonomy_NoReviewer(t *testing.T) {
 	stats := []DriftStats{
-		{Category: "ai", Keyword: "transformer", Coverage: 0.2, MissedDocs: 30},
-		{Category: "ai", Keyword: "neural network", Coverage: 0.7, MissedDocs: 5},
+		{Type: DriftLowCoverage, Category: "ai", Keyword: "transformer", Coverage: 0.2, MissedDocs: 30},
+		{Type: DriftLowCoverage, Category: "ai", Keyword: "neural network", Coverage: 0.7, MissedDocs: 5},
 	}
 
 	tuner := AutoTuner{
@@ -50,6 +50,10 @@ func TestAutoTunerTaxonomy_NoReviewer(t *testing.T) {
 		t.Fatalf("Expected transformer suggestion, got %+v", suggestions)
 	}
 
+	if suggestions[0].Type != DriftLowCoverage {
+		t.Errorf("Expected type %s, got %s", DriftLowCoverage, suggestions[0].Type)
+	}
+
 	if suggestions[0].Confidence <= 0 {
 		t.Fatalf("Confidence should be > 0, got %f", suggestions[0].Confidence)
 	}
@@ -57,8 +61,8 @@ func TestAutoTunerTaxonomy_NoReviewer(t *testing.T) {
 
 func TestAutoTunerTaxonomy_WithReviewer(t *testing.T) {
 	stats := []DriftStats{
-		{Category: "energy", Keyword: "solar", Coverage: 0.3, MissedDocs: 40},
-		{Category: "energy", Keyword: "battery", Coverage: 0.25, MissedDocs: 15},
+		{Type: DriftLowCoverage, Category: "energy", Keyword: "solar", Coverage: 0.3, MissedDocs: 40},
+		{Type: DriftLowCoverage, Category: "energy", Keyword: "battery", Coverage: 0.25, MissedDocs: 15},
 	}
 
 	tuner := AutoTuner{
@@ -93,7 +97,7 @@ func TestAutoTunerTaxonomy_ProviderError(t *testing.T) {
 
 func TestAutoTunerTaxonomy_ReviewerError(t *testing.T) {
 	stats := []DriftStats{
-		{Category: "ai", Keyword: "ml", Coverage: 0.3, MissedDocs: 50},
+		{Type: DriftLowCoverage, Category: "ai", Keyword: "ml", Coverage: 0.3, MissedDocs: 50},
 	}
 
 	tuner := AutoTuner{
@@ -103,5 +107,81 @@ func TestAutoTunerTaxonomy_ReviewerError(t *testing.T) {
 
 	if _, err := tuner.Run(context.Background()); err == nil {
 		t.Fatal("expected reviewer error")
+	}
+}
+
+func TestAutoTunerTaxonomy_OrphanTokens(t *testing.T) {
+	stats := []DriftStats{
+		{Type: DriftOrphan, Category: "ai", Keyword: "kubernetes", SupportDocs: 50, Coverage: 0.10},
+		{Type: DriftOrphan, Category: "", Keyword: "devops", SupportDocs: 30, Coverage: 0.06},
+		{Type: DriftOrphan, Category: "", Keyword: "rare", SupportDocs: 0, Coverage: 0.001},
+	}
+
+	tuner := AutoTuner{
+		Provider:   fakeProvider{stats: stats},
+		Thresholds: Thresholds{MinOrphanDF: 0.05},
+	}
+
+	suggestions, err := tuner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// "rare" should be filtered (SupportDocs=0)
+	if len(suggestions) != 2 {
+		t.Fatalf("Expected 2 orphan suggestions, got %d: %+v", len(suggestions), suggestions)
+	}
+
+	for _, s := range suggestions {
+		if s.Type != DriftOrphan {
+			t.Errorf("Expected orphan type, got %s for %s", s.Type, s.Keyword)
+		}
+	}
+
+	// kubernetes has a suggested category, should have higher confidence
+	var kubConf, devConf float64
+	for _, s := range suggestions {
+		if s.Keyword == "kubernetes" {
+			kubConf = s.Confidence
+		}
+		if s.Keyword == "devops" {
+			devConf = s.Confidence
+		}
+	}
+	if kubConf <= devConf {
+		t.Errorf("kubernetes (with category) should have higher confidence than devops: %f vs %f", kubConf, devConf)
+	}
+}
+
+func TestAutoTunerTaxonomy_MixedTypes(t *testing.T) {
+	stats := []DriftStats{
+		{Type: DriftLowCoverage, Category: "ai", Keyword: "transformer", Coverage: 0.1, MissedDocs: 25},
+		{Type: DriftOrphan, Category: "security", Keyword: "ransomware", SupportDocs: 40, Coverage: 0.08},
+	}
+
+	tuner := AutoTuner{
+		Provider: fakeProvider{stats: stats},
+		Thresholds: Thresholds{
+			MinCoverage:   0.4,
+			MinMissedDocs: 10,
+			MinOrphanDF:   0.05,
+		},
+	}
+
+	suggestions, err := tuner.Run(context.Background())
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if len(suggestions) != 2 {
+		t.Fatalf("Expected 2 suggestions (1 low_coverage + 1 orphan), got %d: %+v", len(suggestions), suggestions)
+	}
+
+	types := map[string]bool{}
+	for _, s := range suggestions {
+		types[s.Type] = true
+	}
+	if !types[DriftLowCoverage] || !types[DriftOrphan] {
+		t.Errorf("Expected both types, got %v", types)
 	}
 }

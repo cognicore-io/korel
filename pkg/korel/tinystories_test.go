@@ -414,6 +414,24 @@ func TestTinyStoriesAutoTune(t *testing.T) {
 		}
 	}
 
+	if len(result.TaxonomySuggestions) > 0 {
+		t.Logf("=== AutoTune discovered %d taxonomy drift suggestions ===", len(result.TaxonomySuggestions))
+		limit := len(result.TaxonomySuggestions)
+		if limit > 20 {
+			limit = 20
+		}
+		for i := 0; i < limit; i++ {
+			s := result.TaxonomySuggestions[i]
+			t.Logf("  [%s] %q → category %q (confidence=%.2f, missed=%d)",
+				s.Type, s.Keyword, s.Category, s.Confidence, s.MissedDocs)
+		}
+		if len(result.TaxonomySuggestions) > 20 {
+			t.Logf("  ... and %d more", len(result.TaxonomySuggestions)-20)
+		}
+	} else {
+		t.Log("=== No taxonomy drift detected (no taxonomy configured) ===")
+	}
+
 	// Phase 3: Build augmented stoplist and re-ingest.
 	augmentedStops := make([]string, len(childStopwords()))
 	copy(augmentedStops, childStopwords())
