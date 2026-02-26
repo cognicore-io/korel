@@ -31,6 +31,7 @@ func TestChatCLIIntegration(t *testing.T) {
 		"",
 		taxonomy,
 		"",
+		true,
 	)
 	if err != nil {
 		t.Fatalf("buildEngine: %v", err)

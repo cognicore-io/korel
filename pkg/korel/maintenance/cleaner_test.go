@@ -59,7 +59,16 @@ func (f *fakeStore) TopNeighbors(ctx context.Context, token string, k int) ([]st
 	return nil, nil
 }
 func (f *fakeStore) AllTokens(ctx context.Context) ([]string, error) { return nil, nil }
-func (f *fakeStore) UpsertCard(ctx context.Context, c store.Card) error          { return nil }
+func (f *fakeStore) UpsertEdge(ctx context.Context, e store.Edge) error          { return nil }
+func (f *fakeStore) GetEdges(ctx context.Context, subject string) ([]store.Edge, error) {
+	return nil, nil
+}
+func (f *fakeStore) GetEdgesByRelation(ctx context.Context, relation string, limit int) ([]store.Edge, error) {
+	return nil, nil
+}
+func (f *fakeStore) DeleteEdgesBySource(ctx context.Context, source string) error { return nil }
+func (f *fakeStore) AllEdges(ctx context.Context) ([]store.Edge, error)           { return nil, nil }
+func (f *fakeStore) UpsertCard(ctx context.Context, c store.Card) error           { return nil }
 func (f *fakeStore) GetCardsByPeriod(ctx context.Context, period string, k int) ([]store.Card, error) {
 	return nil, nil
 }

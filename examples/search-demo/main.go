@@ -20,7 +20,7 @@ import (
 
 	"github.com/cognicore/korel/pkg/korel"
 	"github.com/cognicore/korel/pkg/korel/config"
-	"github.com/cognicore/korel/pkg/korel/inference/simple"
+	prologinf "github.com/cognicore/korel/pkg/korel/inference/prolog"
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/pmi"
 	"github.com/cognicore/korel/pkg/korel/store/sqlite"
@@ -99,7 +99,10 @@ func main() {
 		log.Fatalf("open store: %v", err)
 	}
 
-	inf := simple.New()
+	inf, err := prologinf.New()
+	if err != nil {
+		log.Fatalf("prolog engine: %v", err)
+	}
 
 	engine := korel.New(korel.Options{
 		Store:     store,

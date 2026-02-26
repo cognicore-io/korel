@@ -36,6 +36,7 @@ type Store struct {
 	taxEvents  map[string][]string              // event name → keywords
 	taxRegions map[string][]string              // region name → keywords
 	taxEnts    map[string]map[string][]string   // entity type → name → keywords
+	edges      []store.Edge                      // knowledge graph edges
 }
 
 type dictEntry struct {
@@ -426,6 +427,77 @@ func (s *Store) TopNeighbors(ctx context.Context, token string, k int) ([]store.
 	}
 
 	return neighbors, nil
+}
+
+// --- Edge methods (knowledge graph) ---
+
+// UpsertEdge inserts or updates an edge.
+func (s *Store) UpsertEdge(_ context.Context, e store.Edge) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, existing := range s.edges {
+		if existing.Subject == e.Subject && existing.Relation == e.Relation && existing.Object == e.Object {
+			s.edges[i] = e
+			return nil
+		}
+	}
+	s.edges = append(s.edges, e)
+	return nil
+}
+
+// GetEdges returns all edges with the given subject.
+func (s *Store) GetEdges(_ context.Context, subject string) ([]store.Edge, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var result []store.Edge
+	for _, e := range s.edges {
+		if e.Subject == subject {
+			result = append(result, e)
+		}
+	}
+	return result, nil
+}
+
+// GetEdgesByRelation returns edges of a given relation type.
+func (s *Store) GetEdgesByRelation(_ context.Context, relation string, limit int) ([]store.Edge, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if limit <= 0 {
+		limit = 1000
+	}
+	var result []store.Edge
+	for _, e := range s.edges {
+		if e.Relation == relation {
+			result = append(result, e)
+			if len(result) >= limit {
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+// DeleteEdgesBySource removes all edges from a given source.
+func (s *Store) DeleteEdgesBySource(_ context.Context, source string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	filtered := s.edges[:0]
+	for _, e := range s.edges {
+		if e.Source != source {
+			filtered = append(filtered, e)
+		}
+	}
+	s.edges = filtered
+	return nil
+}
+
+// AllEdges returns every edge in the knowledge graph.
+func (s *Store) AllEdges(_ context.Context) ([]store.Edge, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	result := make([]store.Edge, len(s.edges))
+	copy(result, s.edges)
+	return result, nil
 }
 
 // AllTokens returns all distinct tokens in the corpus.

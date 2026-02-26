@@ -642,7 +642,7 @@ func TestSQLiteIntegrationSchemaExists(t *testing.T) {
 
 	expectedTables := []string{
 		"cards", "dict_entries", "doc_cats", "doc_entities", "doc_tokens",
-		"docs", "stoplist", "taxonomy_entities", "taxonomy_events",
+		"docs", "edges", "stoplist", "taxonomy_entities", "taxonomy_events",
 		"taxonomy_regions", "taxonomy_sectors", "token_df", "token_pairs",
 	}
 	if len(tables) != len(expectedTables) {

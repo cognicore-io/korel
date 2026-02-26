@@ -9,6 +9,8 @@ import (
 	"github.com/cognicore/korel/internal/rss"
 	"github.com/cognicore/korel/pkg/korel"
 	"github.com/cognicore/korel/pkg/korel/config"
+	"github.com/cognicore/korel/pkg/korel/inference"
+	prologinf "github.com/cognicore/korel/pkg/korel/inference/prolog"
 	"github.com/cognicore/korel/pkg/korel/inference/simple"
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/store/sqlite"
@@ -22,7 +24,8 @@ func main() {
 		dictPath     = flag.String("dict", "", "Dictionary file (required)")
 		baseDictPath = flag.String("base-dict", "", "Base dictionary to merge (e.g., configs/base-tech.dict)")
 		taxonomyPath = flag.String("taxonomy", "", "Taxonomy file (required)")
-		rulesPath    = flag.String("rules", "", "Rules file (optional)")
+		rulesPath       = flag.String("rules", "", "Rules file (optional)")
+		simpleInference = flag.Bool("simple-inference", false, "Use simple inference engine instead of Prolog")
 	)
 	flag.Parse()
 
@@ -62,7 +65,15 @@ func main() {
 	pipeline := ingest.NewPipeline(components.Tokenizer, components.Parser, components.Taxonomy)
 
 	// Initialize inference engine
-	inf := simple.New()
+	var inf inference.Engine
+	if *simpleInference {
+		inf = simple.New()
+	} else {
+		inf, err = prologinf.New()
+		if err != nil {
+			log.Fatal("Failed to create Prolog engine:", err)
+		}
+	}
 	if components.Rules != "" {
 		rulesData, err := os.ReadFile(components.Rules)
 		if err != nil {

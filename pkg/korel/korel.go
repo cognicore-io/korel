@@ -2,7 +2,9 @@ package korel
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/cognicore/korel/pkg/korel/analytics"
@@ -82,18 +84,31 @@ func (k *Korel) isConcept(token string) bool {
 	return ok
 }
 
-// WarmInference populates the inference engine's fact graph from corpus PMI
-// statistics. Only dictionary concepts are added as facts — raw words are
-// filtered out. Call after batch ingest to enable transitive query expansion
-// (2-hop discovery: A↔B and B↔C means searching A finds C).
+// WarmInference populates the knowledge graph and inference engine.
+// Delegates to BuildGraph which generates edges from all sources.
 func (k *Korel) WarmInference(ctx context.Context) error {
+	return k.BuildGraph(ctx)
+}
+
+// BuildGraph populates the persistent edges table from all knowledge sources
+// (PMI co-occurrence, taxonomy, dictionary) and loads them into the inference
+// engine. Idempotent: clears auto-generated edges before repopulating.
+func (k *Korel) BuildGraph(ctx context.Context) error {
+	// 1. Clear old auto-generated edges
+	for _, src := range []string{"pmi", "taxonomy", "dict"} {
+		if err := k.store.DeleteEdgesBySource(ctx, src); err != nil {
+			return fmt.Errorf("clear %s edges: %w", src, err)
+		}
+	}
+
+	// 2. PMI edges: related_to(concept_a, concept_b) where NPMI >= 0.3
 	tokens, err := k.store.AllTokens(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("all tokens: %w", err)
 	}
 	for _, tok := range tokens {
 		if !k.isConcept(tok) {
-			continue // only build graph edges between known concepts
+			continue
 		}
 		neighbors, err := k.store.TopNeighbors(ctx, tok, 10)
 		if err != nil {
@@ -101,10 +116,74 @@ func (k *Korel) WarmInference(ctx context.Context) error {
 		}
 		for _, nb := range neighbors {
 			if nb.PMI >= 0.3 && k.isConcept(nb.Token) {
-				k.inf.AddFact("related_to", tok, nb.Token)
+				if err := k.store.UpsertEdge(ctx, store.Edge{
+					Subject: tok, Relation: "related_to", Object: nb.Token,
+					Weight: nb.PMI, Source: "pmi",
+				}); err != nil {
+					continue
+				}
 			}
 		}
 	}
+
+	// 3. Taxonomy edges: category(keyword, category_name)
+	// Source from the pipeline (always has taxonomy data), not the store
+	// (taxonomy tables may be unpopulated).
+	for cat, kws := range k.pipeline.TaxonomySectors() {
+		for _, kw := range kws {
+			k.store.UpsertEdge(ctx, store.Edge{
+				Subject: kw, Relation: "category", Object: cat,
+				Weight: 1.0, Source: "taxonomy",
+			})
+		}
+	}
+	for cat, kws := range k.pipeline.TaxonomyEvents() {
+		for _, kw := range kws {
+			k.store.UpsertEdge(ctx, store.Edge{
+				Subject: kw, Relation: "category", Object: cat,
+				Weight: 1.0, Source: "taxonomy",
+			})
+		}
+	}
+	for cat, kws := range k.pipeline.TaxonomyRegions() {
+		for _, kw := range kws {
+			k.store.UpsertEdge(ctx, store.Edge{
+				Subject: kw, Relation: "category", Object: cat,
+				Weight: 1.0, Source: "taxonomy",
+			})
+		}
+	}
+
+	// 4. Dictionary edges: synonym(variant, canonical) + is_a(canonical, category)
+	// Source from the pipeline dict entries directly.
+	for _, e := range k.pipeline.DictEntries() {
+		canonical := strings.ToLower(e.Canonical)
+		for _, v := range e.Variants {
+			variant := strings.ToLower(v)
+			if variant != canonical {
+				k.store.UpsertEdge(ctx, store.Edge{
+					Subject: variant, Relation: "synonym", Object: canonical,
+					Weight: 1.0, Source: "dict",
+				})
+			}
+		}
+		if e.Category != "" {
+			k.store.UpsertEdge(ctx, store.Edge{
+				Subject: canonical, Relation: "is_a", Object: e.Category,
+				Weight: 1.0, Source: "dict",
+			})
+		}
+	}
+
+	// 5. Load all persisted edges into inference engine
+	edges, err := k.store.AllEdges(ctx)
+	if err != nil {
+		return fmt.Errorf("load edges: %w", err)
+	}
+	for _, e := range edges {
+		k.inf.AddFact(e.Relation, e.Subject, e.Object)
+	}
+
 	return nil
 }
 

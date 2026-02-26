@@ -159,6 +159,17 @@ CREATE TABLE IF NOT EXISTS taxonomy_entities (
 	keyword TEXT NOT NULL,
 	PRIMARY KEY(type, name, keyword)
 );
+
+CREATE TABLE IF NOT EXISTS edges (
+	subject TEXT NOT NULL,
+	relation TEXT NOT NULL,
+	object TEXT NOT NULL,
+	weight REAL NOT NULL DEFAULT 1.0,
+	source TEXT NOT NULL,
+	PRIMARY KEY(subject, relation, object)
+);
+CREATE INDEX IF NOT EXISTS idx_edges_subject ON edges(subject);
+CREATE INDEX IF NOT EXISTS idx_edges_object ON edges(object);
 `
 
 	_, err := db.ExecContext(ctx, schema)
@@ -179,6 +190,32 @@ func migrateSchema(ctx context.Context, db *sql.DB) error {
 			return err
 		}
 	}
+
+	// Migrate: add edges table if missing.
+	var edgesExists int
+	err = db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='edges'`).Scan(&edgesExists)
+	if err != nil {
+		return err
+	}
+	if edgesExists == 0 {
+		_, err = db.ExecContext(ctx, `
+CREATE TABLE edges (
+	subject TEXT NOT NULL,
+	relation TEXT NOT NULL,
+	object TEXT NOT NULL,
+	weight REAL NOT NULL DEFAULT 1.0,
+	source TEXT NOT NULL,
+	PRIMARY KEY(subject, relation, object)
+);
+CREATE INDEX idx_edges_subject ON edges(subject);
+CREATE INDEX idx_edges_object ON edges(object);
+`)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -549,6 +586,74 @@ func (s *sqliteStore) AllTokens(ctx context.Context) ([]string, error) {
 		tokens = append(tokens, tok)
 	}
 	return tokens, rows.Err()
+}
+
+// --- Edge methods (knowledge graph) ---
+
+// UpsertEdge inserts or updates an edge in the knowledge graph.
+func (s *sqliteStore) UpsertEdge(ctx context.Context, e store.Edge) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO edges (subject, relation, object, weight, source)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(subject, relation, object) DO UPDATE SET
+	weight=excluded.weight, source=excluded.source;
+`, e.Subject, e.Relation, e.Object, e.Weight, e.Source)
+	return err
+}
+
+// GetEdges returns all edges with the given subject.
+func (s *sqliteStore) GetEdges(ctx context.Context, subject string) ([]store.Edge, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT subject, relation, object, weight, source FROM edges WHERE subject = ?`, subject)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEdges(rows)
+}
+
+// GetEdgesByRelation returns edges of a given relation type.
+func (s *sqliteStore) GetEdgesByRelation(ctx context.Context, relation string, limit int) ([]store.Edge, error) {
+	if limit <= 0 {
+		limit = 1000
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT subject, relation, object, weight, source FROM edges WHERE relation = ? LIMIT ?`,
+		relation, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEdges(rows)
+}
+
+// DeleteEdgesBySource removes all edges from a given source.
+func (s *sqliteStore) DeleteEdgesBySource(ctx context.Context, source string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM edges WHERE source = ?`, source)
+	return err
+}
+
+// AllEdges returns every edge in the knowledge graph.
+func (s *sqliteStore) AllEdges(ctx context.Context) ([]store.Edge, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT subject, relation, object, weight, source FROM edges`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanEdges(rows)
+}
+
+func scanEdges(rows *sql.Rows) ([]store.Edge, error) {
+	var edges []store.Edge
+	for rows.Next() {
+		var e store.Edge
+		if err := rows.Scan(&e.Subject, &e.Relation, &e.Object, &e.Weight, &e.Source); err != nil {
+			return nil, err
+		}
+		edges = append(edges, e)
+	}
+	return edges, rows.Err()
 }
 
 // UpsertCard inserts or updates a card

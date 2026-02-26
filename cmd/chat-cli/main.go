@@ -12,6 +12,8 @@ import (
 
 	"github.com/cognicore/korel/pkg/korel"
 	"github.com/cognicore/korel/pkg/korel/config"
+	"github.com/cognicore/korel/pkg/korel/inference"
+	prologinf "github.com/cognicore/korel/pkg/korel/inference/prolog"
 	"github.com/cognicore/korel/pkg/korel/inference/simple"
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/store/sqlite"
@@ -25,8 +27,9 @@ func main() {
 		baseDictPath = flag.String("base-dict", "", "Base dictionary to merge (e.g., configs/base-tech.dict)")
 		taxonomyPath = flag.String("taxonomy", "", "Taxonomy file (required)")
 		rulesPath    = flag.String("rules", "", "Rules file (optional)")
-		query        = flag.String("query", "", "One-shot query (non-interactive mode)")
-		topK         = flag.Int("topk", 3, "Number of results to return")
+		query           = flag.String("query", "", "One-shot query (non-interactive mode)")
+		topK            = flag.Int("topk", 3, "Number of results to return")
+		simpleInference = flag.Bool("simple-inference", false, "Use simple inference engine instead of Prolog")
 	)
 	flag.Parse()
 
@@ -45,7 +48,7 @@ func main() {
 
 	ctx := context.Background()
 
-	engine, cleanup, err := buildEngine(ctx, *dbPath, *stoplistPath, *dictPath, *baseDictPath, *taxonomyPath, *rulesPath)
+	engine, cleanup, err := buildEngine(ctx, *dbPath, *stoplistPath, *dictPath, *baseDictPath, *taxonomyPath, *rulesPath, *simpleInference)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -140,7 +143,7 @@ func executeQuery(ctx context.Context, engine *korel.Korel, query string, topK i
 	return nil
 }
 
-func buildEngine(ctx context.Context, dbPath, stoplistPath, dictPath, baseDictPath, taxonomyPath, rulesPath string) (*korel.Korel, func(), error) {
+func buildEngine(ctx context.Context, dbPath, stoplistPath, dictPath, baseDictPath, taxonomyPath, rulesPath string, useSimple bool) (*korel.Korel, func(), error) {
 	loader := config.Loader{
 		StoplistPath: stoplistPath,
 		DictPath:     dictPath,
@@ -156,7 +159,15 @@ func buildEngine(ctx context.Context, dbPath, stoplistPath, dictPath, baseDictPa
 
 	pipeline := ingest.NewPipeline(components.Tokenizer, components.Parser, components.Taxonomy)
 
-	inf := simple.New()
+	var inf inference.Engine
+	if useSimple {
+		inf = simple.New()
+	} else {
+		inf, err = prologinf.New()
+		if err != nil {
+			return nil, nil, fmt.Errorf("prolog engine: %w", err)
+		}
+	}
 	if components.Rules != "" {
 		data, err := os.ReadFile(components.Rules)
 		if err != nil {

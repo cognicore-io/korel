@@ -24,6 +24,13 @@ type Store interface {
 	TopNeighbors(ctx context.Context, token string, k int) ([]Neighbor, error)
 	AllTokens(ctx context.Context) ([]string, error)
 
+	// Edges (knowledge graph)
+	UpsertEdge(ctx context.Context, e Edge) error
+	GetEdges(ctx context.Context, subject string) ([]Edge, error)
+	GetEdgesByRelation(ctx context.Context, relation string, limit int) ([]Edge, error)
+	DeleteEdgesBySource(ctx context.Context, source string) error
+	AllEdges(ctx context.Context) ([]Edge, error)
+
 	// Cards
 	UpsertCard(ctx context.Context, c Card) error
 	GetCardsByPeriod(ctx context.Context, period string, k int) ([]Card, error)
@@ -62,6 +69,15 @@ type Entity struct {
 type Neighbor struct {
 	Token string
 	PMI   float64
+}
+
+// Edge represents a typed, weighted relation in the knowledge graph.
+type Edge struct {
+	Subject  string
+	Relation string
+	Object   string
+	Weight   float64
+	Source   string // "pmi", "taxonomy", "dict", "entity", "inferred"
 }
 
 // Card represents a stored result card

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cognicore/korel/pkg/korel/cards"
+	prologinf "github.com/cognicore/korel/pkg/korel/inference/prolog"
 	"github.com/cognicore/korel/pkg/korel/inference/simple"
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/query"
@@ -233,6 +234,125 @@ func TestEndToEnd(t *testing.T) {
 	t.Log("✓ End-to-end test completed successfully")
 }
 
+// TestEndToEndProlog verifies the full Korel workflow with the Prolog
+// inference engine, demonstrating transitive and same-domain expansion.
+func TestEndToEndProlog(t *testing.T) {
+	ctx := context.Background()
+
+	tokenizer := ingest.NewTokenizer([]string{"the", "a", "and", "of", "in"})
+
+	mtParser := ingest.NewMultiTokenParser([]ingest.DictEntry{
+		{Canonical: "machine learning", Variants: []string{"ml"}, Category: "ai"},
+		{Canonical: "neural network", Variants: []string{"nn"}, Category: "ai"},
+		{Canonical: "deep learning", Variants: []string{"dl"}, Category: "ai"},
+	})
+
+	taxonomy := ingest.NewTaxonomy()
+	taxonomy.AddSector("ai", []string{"machine learning", "neural network", "deep learning"})
+
+	pipeline := ingest.NewPipeline(tokenizer, mtParser, taxonomy)
+
+	// Use Prolog engine instead of simple
+	inf, err := prologinf.New()
+	if err != nil {
+		t.Fatalf("prologinf.New() failed: %v", err)
+	}
+
+	// Load facts — Prolog rules (transitive, same_domain, etc.) are built-in
+	inf.AddFact("related_to", "machine learning", "neural network")
+	inf.AddFact("related_to", "neural network", "deep learning")
+	inf.AddFact("category", "machine learning", "ai")
+	inf.AddFact("category", "neural network", "ai")
+	inf.AddFact("category", "deep learning", "ai")
+
+	// Verify Prolog inference works
+	expanded := inf.Expand([]string{"machine learning"})
+	if len(expanded) == 0 {
+		t.Fatal("Prolog Expand returned no results — inference rules not working")
+	}
+	t.Logf("Prolog expanded 'machine learning' to: %v", expanded)
+
+	// Should find "deep learning" transitively (machine learning → neural network → deep learning)
+	found := false
+	for _, tok := range expanded {
+		if tok == "deep learning" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected transitive expansion to find 'deep learning' from 'machine learning'")
+	}
+
+	// Create mock store and Korel instance
+	mockStore := newMockStoreForE2E()
+
+	k := New(Options{
+		Store:    mockStore,
+		Pipeline: pipeline,
+		Inference: inf,
+		Weights: ScoreWeights{
+			AlphaPMI:     1.0,
+			BetaCats:     0.6,
+			GammaRecency: 0.8,
+			EtaAuthority: 0.2,
+			DeltaLen:     0.05,
+			ThetaInfer:   0.3,
+		},
+		RecencyHalfLife: 14,
+	})
+
+	// Ingest documents
+	docs := []IngestDoc{
+		{
+			URL:         "https://example.com/ml-basics",
+			Title:       "Machine Learning Basics",
+			Outlet:      "Tech Blog",
+			PublishedAt: time.Now().Add(-7 * 24 * time.Hour),
+			BodyText:    "Machine learning is a subset of artificial intelligence.",
+			SourceCats:  []string{"ai"},
+		},
+		{
+			URL:         "https://example.com/dl-guide",
+			Title:       "Deep Learning in Practice",
+			Outlet:      "AI Weekly",
+			PublishedAt: time.Now().Add(-2 * 24 * time.Hour),
+			BodyText:    "Deep learning uses neural networks with many layers.",
+			SourceCats:  []string{"ai"},
+		},
+	}
+
+	for _, doc := range docs {
+		if err := k.Ingest(ctx, doc); err != nil {
+			t.Fatalf("Ingest failed: %v", err)
+		}
+	}
+
+	// Search — the Prolog engine should expand the query beyond simple keyword matching
+	res, err := k.Search(ctx, SearchRequest{
+		Query: "machine learning",
+		TopK:  5,
+		Now:   time.Now(),
+	})
+	if err != nil {
+		t.Fatalf("Search failed: %v", err)
+	}
+
+	t.Logf("Search returned %d cards", len(res.Cards))
+	if len(res.Cards) > 0 {
+		explain := res.Cards[0].Explain
+		t.Logf("  Query tokens: %v", explain.QueryTokens)
+		t.Logf("  Expanded tokens: %v", explain.ExpandedTokens)
+
+		// Expanded tokens should be richer than query tokens (due to Prolog inference)
+		if len(explain.ExpandedTokens) <= len(explain.QueryTokens) {
+			t.Logf("  Warning: expansion did not add tokens (may depend on store state)")
+		}
+	}
+
+	t.Log("✓ Prolog end-to-end test completed successfully")
+}
+
 // mockStoreForE2E is a simple mock store for e2e testing
 type mockStoreForE2E struct {
 	docs      []store.Doc
@@ -415,6 +535,17 @@ func (m *mockStoreForE2E) AllTokens(ctx context.Context) ([]string, error) {
 	}
 	return tokens, nil
 }
+func (m *mockStoreForE2E) UpsertEdge(ctx context.Context, e store.Edge) error { return nil }
+func (m *mockStoreForE2E) GetEdges(ctx context.Context, subject string) ([]store.Edge, error) {
+	return nil, nil
+}
+func (m *mockStoreForE2E) GetEdgesByRelation(ctx context.Context, relation string, limit int) ([]store.Edge, error) {
+	return nil, nil
+}
+func (m *mockStoreForE2E) DeleteEdgesBySource(ctx context.Context, source string) error {
+	return nil
+}
+func (m *mockStoreForE2E) AllEdges(ctx context.Context) ([]store.Edge, error) { return nil, nil }
 
 // queryStoreAdapter adapts store.Store to query.Store interface
 type queryStoreAdapter struct {
