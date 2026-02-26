@@ -190,14 +190,14 @@ Inspired by decades of proven research (IBM n-grams, expert systems, "web as cor
 
 ### Bootstrapping a New Corpus
 
-1. Run the bootstrap CLI to analyze the raw JSONL and emit starter configs:
+1. Run the bootstrap CLI to analyze a raw JSONL corpus and emit starter configs:
    ```bash
    go run ./cmd/bootstrap \
-     -input dataset/docs.jsonl \
-     -domain finance \
-     -output configs/finance
+     -input testdata/hn/docs.jsonl \
+     -domain tech \
+     -output configs/tech
    ```
-   (Use `-llm-base/-llm-model/-llm-api-key` to have an OpenAI/Azure/Ollama reviewer vet stopwords.)
+   (Use `-llm-base/-llm-model` to have an OpenAI/Azure/Ollama reviewer vet stopwords.)
 2. Inspect generated configs:
    - `bootstrap-report.json` - Full statistics and analysis
    - `stoplist.yaml` - Discovered stopwords
@@ -312,15 +312,27 @@ pkg/korel/
 
 ### Test Data (`testdata/`)
 
-Synthetic news articles and configuration for testing:
+Configuration files and downloaded corpora for testing:
 
 ```
-testdata/news/
-├── docs.jsonl           # Sample articles (energy/policy domain)
-├── tokens.dict          # Multi-token dictionary (feed-in tariff|fit|policy)
-├── taxonomies.yaml      # Sectors, events, regions, entities
-└── stoplist.yaml        # Initial stopword list (self-adjusting)
+testdata/
+├── hn/                  # Hacker News domain configs
+│   ├── stoplist.yaml    #   Stopword list (self-adjusting)
+│   ├── tokens.dict      #   Multi-token dictionary
+│   └── taxonomies.yaml  #   Sectors, events, regions, entities
+├── arxiv/               # arXiv domain configs
+│   ├── stoplist.yaml
+│   ├── tokens.dict
+│   └── taxonomies.yaml
+├── bootstrap/           # Bootstrap command configs
+│   ├── stoplist.yaml
+│   ├── tokens.dict
+│   └── taxonomies.yaml
+└── chat/
+    └── queries.txt      # Sample queries for testing
 ```
+
+Corpus data (`docs.jsonl`) is created by the download commands — see Quick Start.
 
 ---
 
@@ -509,9 +521,10 @@ wc -l testdata/hn/docs.jsonl testdata/arxiv/docs.jsonl
 go run ./cmd/rss-indexer \
   -db ./data/hn.db \
   -data testdata/hn/docs.jsonl \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml \
+  -rules configs/rules/ai.rules    # optional: symbolic inference rules
 ```
 
 **What happens:**
@@ -539,9 +552,9 @@ Ingested 20/50 documents
 go run ./cmd/rss-indexer \
   -db ./data/arxiv.db \
   -data testdata/arxiv/docs.jsonl \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml
 ```
 
 **Result:** Second database at `./data/arxiv.db` with 50 research papers indexed.
@@ -554,9 +567,10 @@ Now test retrieval with interactive queries:
 ```bash
 go run ./cmd/chat-cli \
   -db ./data/hn.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml \
+  -rules configs/rules/ai.rules    # optional: symbolic inference rules
 ```
 
 **Example queries to try:**
@@ -572,9 +586,9 @@ go run ./cmd/chat-cli \
 ```bash
 go run ./cmd/chat-cli \
   -db ./data/arxiv.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml
 ```
 
 **Example queries to try:**
@@ -594,17 +608,17 @@ For testing and automation, you can execute a single query without entering inte
 # Query with default topK=3
 go run ./cmd/chat-cli \
   -db ./data/hn.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml \
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml \
   -query "open source"
 
 # Query with custom topK
 go run ./cmd/chat-cli \
   -db ./data/arxiv.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml \
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml \
   -query "machine learning" \
   -topk 5
 ```
@@ -685,7 +699,11 @@ If you already have indexed data:
 
 ```bash
 # Query existing database
-go run ./cmd/chat-cli -db ./data/korel.db
+go run ./cmd/chat-cli \
+  -db ./data/hn.db \
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml
 ```
 
 ---
@@ -724,9 +742,9 @@ Explain:
 ```yaml
 db_path: ./data/korel.db
 snapshot_dir: ./data/snapshots
-dict_path: testdata/news/tokens.dict
-taxonomy_path: testdata/news/taxonomies.yaml
-stoplist_path: testdata/news/stoplist.yaml
+dict_path: testdata/hn/tokens.dict
+taxonomy_path: testdata/hn/taxonomies.yaml
+stoplist_path: testdata/hn/stoplist.yaml
 
 score_weights:
   alpha_pmi: 1.0
@@ -738,7 +756,7 @@ score_weights:
 recency_halflife_days: 14
 ```
 
-### Token Dictionary (`testdata/news/tokens.dict`)
+### Token Dictionary (`testdata/hn/tokens.dict`)
 
 ```
 feed-in tariff|fit|policy
@@ -749,7 +767,7 @@ power purchase agreement|ppa|finance
 
 Format: `canonical_form|synonym1|synonym2|category`
 
-### Taxonomy (`testdata/news/taxonomies.yaml`)
+### Taxonomy (`testdata/hn/taxonomies.yaml`)
 
 ```yaml
 sectors:
@@ -767,6 +785,19 @@ entities:
   tickers:
     ENEL: [enel, enel spa]
 ```
+
+### Inference Rules (`configs/rules/ai.rules`)
+
+Optional Prolog-style rules for symbolic query expansion:
+
+```prolog
+is_a(bert, transformer)
+is_a(transformer, neural-network)
+used_for(transformer, nlp)
+related_to(bert, masked-language-modeling)
+```
+
+Both `rss-indexer` and `chat-cli` accept an optional `-rules` flag. AutoTune also auto-generates `related_to` rules from high-PMI pairs.
 
 ---
 

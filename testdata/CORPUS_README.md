@@ -102,9 +102,9 @@ go run ./cmd/download-arxiv q-fin 50    # 50 Finance papers
 go run ./cmd/rss-indexer \
   -db ./data/hn.db \
   -data testdata/hn/docs.jsonl \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml
 ```
 
 **Step 2: Ingest arXiv corpus**
@@ -112,9 +112,9 @@ go run ./cmd/rss-indexer \
 go run ./cmd/rss-indexer \
   -db ./data/arxiv.db \
   -data testdata/arxiv/docs.jsonl \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml
 ```
 
 **What happens during ingestion:**
@@ -142,9 +142,9 @@ go run ./cmd/rss-indexer \
 ```bash
 go run ./cmd/chat-cli \
   -db ./data/hn.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml
 ```
 
 **Try these queries on HN:**
@@ -159,9 +159,9 @@ go run ./cmd/chat-cli \
 ```bash
 go run ./cmd/chat-cli \
   -db ./data/arxiv.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml
 ```
 
 **Try these queries on arXiv:**
@@ -177,17 +177,17 @@ go run ./cmd/chat-cli \
 # Query HN corpus directly
 go run ./cmd/chat-cli \
   -db ./data/hn.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml \
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml \
   -query "open source"
 
 # Query arXiv corpus with custom topK
 go run ./cmd/chat-cli \
   -db ./data/arxiv.db \
-  -stoplist testdata/news/stoplist.yaml \
-  -dict testdata/news/tokens.dict \
-  -taxonomy testdata/news/taxonomies.yaml \
+  -stoplist testdata/hn/stoplist.yaml \
+  -dict testdata/hn/tokens.dict \
+  -taxonomy testdata/hn/taxonomies.yaml \
   -query "machine learning" \
   -topk 5
 ```

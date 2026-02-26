@@ -4,9 +4,9 @@ db_path: ./data/korel.db
 snapshot_dir: ./data/snapshots
 
 # Paths to configuration files
-dict_path: testdata/news/tokens.dict
-taxonomy_path: testdata/news/taxonomies.yaml
-stoplist_path: testdata/news/stoplist.yaml
+dict_path: testdata/hn/tokens.dict
+taxonomy_path: testdata/hn/taxonomies.yaml
+stoplist_path: testdata/hn/stoplist.yaml
 
 # Hybrid scoring weights
 score_weights:
