@@ -316,7 +316,7 @@ func TestConcurrentOpen(t *testing.T) {
 		t.Fatalf("Count tables: %v", err)
 	}
 
-	if count != 14 {
-		t.Errorf("Expected 14 tables, got %d", count)
+	if count != 15 {
+		t.Errorf("Expected 15 tables, got %d", count)
 	}
 }

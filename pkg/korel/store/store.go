@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+// FeedbackStats aggregates user feedback for adaptive ranking.
+type FeedbackStats struct {
+	TotalClicks     int
+	TotalDismisses  int
+	AvgClickPMI     float64
+	AvgClickCats    float64
+	AvgClickRecency float64
+}
+
 // Store is the main interface for persisting and querying Korel data
 type Store interface {
 	Close() error
@@ -21,7 +30,7 @@ type Store interface {
 	IncPair(ctx context.Context, t1, t2 string) error
 	DecPair(ctx context.Context, t1, t2 string) error
 	GetPMI(ctx context.Context, t1, t2 string) (float64, bool, error)
-	TopNeighbors(ctx context.Context, token string, k int) ([]Neighbor, error)
+	TopNeighbors(ctx context.Context, token string, k int) ([]Neighbor, error) // k <= 0 returns all
 	AllTokens(ctx context.Context) ([]string, error)
 
 	// Edges (knowledge graph)
@@ -35,10 +44,24 @@ type Store interface {
 	UpsertCard(ctx context.Context, c Card) error
 	GetCardsByPeriod(ctx context.Context, period string, k int) ([]Card, error)
 
+	// Corpus statistics for BM25
+	DocCount(ctx context.Context) (int64, error)
+	AvgDocLen(ctx context.Context) (float64, error)
+
 	// Config/Stoplist/Dict/Taxonomy (optional as read-through cache)
 	Stoplist() StoplistView
 	Dict() DictView
 	Taxonomy() TaxonomyView
+
+	// Temporal queries (Feature 2)
+	GetDocsByTokensInRange(ctx context.Context, tokens []string, since, until time.Time, limit int) ([]Doc, error)
+
+	// Entity queries (Feature 3)
+	GetDocsByEntity(ctx context.Context, entityType, entityValue string, limit int) ([]Doc, error)
+
+	// Feedback (Feature 5)
+	RecordFeedback(ctx context.Context, sessionID, queryHash, cardID, action string, ts time.Time) error
+	GetFeedbackStats(ctx context.Context) (FeedbackStats, error)
 
 	// Persistence for AutoTune results
 	UpsertStoplist(ctx context.Context, tokens []string) error

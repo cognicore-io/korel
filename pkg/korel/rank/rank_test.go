@@ -195,10 +195,17 @@ func TestScorerFutureTimestamp(t *testing.T) {
 
 	candidate := Candidate{PublishedAt: future}
 
-	score := scorer.Score(query, candidate, now, func(string, string) float64 { return 0 })
+	breakdown := scorer.ScoreWithBreakdown(query, candidate, now, func(string, string) float64 { return 0 })
 
-	// Should handle future timestamps gracefully
-	_ = score
+	// Future timestamps should be clamped to now (recency = 1.0), not exceed it
+	if breakdown.Recency > weights.GammaRecency {
+		t.Errorf("Future timestamp recency should not exceed GammaRecency (%.2f), got %.2f",
+			weights.GammaRecency, breakdown.Recency)
+	}
+	if math.Abs(breakdown.Recency-weights.GammaRecency) > 0.001 {
+		t.Errorf("Future timestamp should get max recency (%.2f), got %.2f",
+			weights.GammaRecency, breakdown.Recency)
+	}
 }
 
 func TestScorerZeroHalfLife(t *testing.T) {
@@ -308,10 +315,10 @@ func TestScorerVeryOldDocument(t *testing.T) {
 }
 
 func TestJaccardEmptySets(t *testing.T) {
-	// Both empty - implementation returns 1.0 (two empty sets are identical)
+	// Both empty — no category info means no signal, not perfect match
 	sim := jaccard([]string{}, []string{})
-	if sim != 1.0 {
-		t.Errorf("Two empty sets should have 1.0 similarity, got %f", sim)
+	if sim != 0.0 {
+		t.Errorf("Two empty sets should have 0.0 similarity, got %f", sim)
 	}
 
 	// One empty - no overlap

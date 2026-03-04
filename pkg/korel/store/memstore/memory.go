@@ -37,6 +37,15 @@ type Store struct {
 	taxRegions map[string][]string              // region name → keywords
 	taxEnts    map[string]map[string][]string   // entity type → name → keywords
 	edges      []store.Edge                      // knowledge graph edges
+	feedback   []feedbackEntry                  // recorded user feedback
+}
+
+type feedbackEntry struct {
+	sessionID string
+	queryHash string
+	cardID    string
+	action    string
+	createdAt time.Time
 }
 
 type dictEntry struct {
@@ -160,6 +169,27 @@ func (s *Store) GetDocByURL(ctx context.Context, url string) (store.Doc, bool, e
 		}
 	}
 	return store.Doc{}, false, nil
+}
+
+// DocCount returns the total number of documents.
+func (s *Store) DocCount(_ context.Context) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return int64(len(s.docs)), nil
+}
+
+// AvgDocLen returns the average number of unique tokens per document.
+func (s *Store) AvgDocLen(_ context.Context) (float64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if len(s.docs) == 0 {
+		return 0, nil
+	}
+	total := 0
+	for _, doc := range s.docs {
+		total += len(doc.Tokens)
+	}
+	return float64(total) / float64(len(s.docs)), nil
 }
 
 // GetDocsByTokens returns documents that contain any of the provided tokens.
@@ -365,6 +395,7 @@ func (s *Store) GetPMI(ctx context.Context, t1, t2 string) (float64, bool, error
 }
 
 // TopNeighbors returns the top K neighbors ranked by PMI score.
+// If k <= 0, all qualifying neighbors are returned (no limit).
 // Uses a lazy adjacency index — rebuilt from pairCounts on first call after mutations.
 func (s *Store) TopNeighbors(ctx context.Context, token string, k int) ([]store.Neighbor, error) {
 	s.mu.Lock()
@@ -373,10 +404,6 @@ func (s *Store) TopNeighbors(ctx context.Context, token string, k int) ([]store.
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
-	if k <= 0 {
-		k = 10
-	}
 
 	total := int64(len(s.docs))
 	if total == 0 {
@@ -422,7 +449,7 @@ func (s *Store) TopNeighbors(ctx context.Context, token string, k int) ([]store.
 	sort.Slice(neighbors, func(i, j int) bool {
 		return neighbors[i].PMI > neighbors[j].PMI
 	})
-	if len(neighbors) > k {
+	if k > 0 && len(neighbors) > k {
 		neighbors = neighbors[:k]
 	}
 
@@ -554,6 +581,130 @@ func (s *Store) GetCardsByPeriod(ctx context.Context, period string, k int) ([]s
 		result = result[:k]
 	}
 	return result, nil
+}
+
+// GetDocsByTokensInRange returns documents containing any of the provided tokens
+// within the specified time range. Zero-value since/until means no bound.
+func (s *Store) GetDocsByTokensInRange(ctx context.Context, tokens []string, since, until time.Time, limit int) ([]store.Doc, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if limit <= 0 {
+		limit = 20
+	}
+
+	tokenSet := make(map[string]struct{}, len(tokens))
+	for _, tok := range tokens {
+		if tok != "" {
+			tokenSet[tok] = struct{}{}
+		}
+	}
+
+	type scored struct {
+		doc store.Doc
+		ts  time.Time
+	}
+
+	var results []scored
+	for _, doc := range s.docs {
+		if !containsAny(doc.Tokens, tokenSet) {
+			continue
+		}
+		if !since.IsZero() && doc.PublishedAt.Before(since) {
+			continue
+		}
+		if !until.IsZero() && doc.PublishedAt.After(until) {
+			continue
+		}
+		results = append(results, scored{doc: copyDoc(doc), ts: doc.PublishedAt})
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].ts.After(results[j].ts)
+	})
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+
+	out := make([]store.Doc, len(results))
+	for i, res := range results {
+		out[i] = res.doc
+	}
+	return out, nil
+}
+
+// GetDocsByEntity returns documents mentioning a specific entity.
+// If entityType is empty, matches any entity type with the given value.
+func (s *Store) GetDocsByEntity(ctx context.Context, entityType, entityValue string, limit int) ([]store.Doc, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if entityValue == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	type scored struct {
+		doc store.Doc
+		ts  time.Time
+	}
+
+	var results []scored
+	for _, doc := range s.docs {
+		for _, ent := range doc.Ents {
+			if ent.Value == entityValue && (entityType == "" || ent.Type == entityType) {
+				results = append(results, scored{doc: copyDoc(doc), ts: doc.PublishedAt})
+				break
+			}
+		}
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].ts.After(results[j].ts)
+	})
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+
+	out := make([]store.Doc, len(results))
+	for i, res := range results {
+		out[i] = res.doc
+	}
+	return out, nil
+}
+
+// RecordFeedback stores a feedback event.
+func (s *Store) RecordFeedback(_ context.Context, sessionID, queryHash, cardID, action string, ts time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.feedback = append(s.feedback, feedbackEntry{
+		sessionID: sessionID,
+		queryHash: queryHash,
+		cardID:    cardID,
+		action:    action,
+		createdAt: ts,
+	})
+	return nil
+}
+
+// GetFeedbackStats returns aggregated feedback statistics.
+func (s *Store) GetFeedbackStats(_ context.Context) (store.FeedbackStats, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var stats store.FeedbackStats
+	for _, fb := range s.feedback {
+		switch fb.action {
+		case "click":
+			stats.TotalClicks++
+		case "dismiss":
+			stats.TotalDismisses++
+		}
+	}
+	return stats, nil
 }
 
 // Stoplist returns a read-only view of the stopword set, or nil if not configured.

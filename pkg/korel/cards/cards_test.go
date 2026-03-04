@@ -191,9 +191,9 @@ func TestBuilderTopPairs(t *testing.T) {
 		{Title: "Test", URL: "http://test.com", Time: time.Now()},
 	}
 
-	topPairs := [][3]interface{}{
-		{"token1", "token2", 2.5},
-		{"token3", "token4", 1.8},
+	topPairs := []PMIPair{
+		{TokenA: "token1", TokenB: "token2", PMI: 2.5},
+		{TokenA: "token3", TokenB: "token4", PMI: 1.8},
 	}
 
 	card := builder.Build("Test", docs, query, topPairs)
@@ -202,8 +202,8 @@ func TestBuilderTopPairs(t *testing.T) {
 		t.Errorf("Should preserve top pairs, got %d", len(card.Explain.TopPairs))
 	}
 
-	if card.Explain.TopPairs[0][2] != 2.5 {
-		t.Errorf("First pair PMI should be 2.5, got %v", card.Explain.TopPairs[0][2])
+	if card.Explain.TopPairs[0].PMI != 2.5 {
+		t.Errorf("First pair PMI should be 2.5, got %v", card.Explain.TopPairs[0].PMI)
 	}
 }
 

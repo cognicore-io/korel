@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/store"
@@ -75,6 +76,18 @@ func (f *fakeStore) GetCardsByPeriod(ctx context.Context, period string, k int) 
 func (f *fakeStore) Stoplist() store.StoplistView { return nil }
 func (f *fakeStore) Dict() store.DictView         { return nil }
 func (f *fakeStore) Taxonomy() store.TaxonomyView { return nil }
+func (f *fakeStore) GetDocsByTokensInRange(ctx context.Context, tokens []string, since, until time.Time, limit int) ([]store.Doc, error) {
+	return nil, nil
+}
+func (f *fakeStore) GetDocsByEntity(ctx context.Context, entityType, entityValue string, limit int) ([]store.Doc, error) {
+	return nil, nil
+}
+func (f *fakeStore) RecordFeedback(ctx context.Context, sessionID, queryHash, cardID, action string, ts time.Time) error {
+	return nil
+}
+func (f *fakeStore) GetFeedbackStats(ctx context.Context) (store.FeedbackStats, error) {
+	return store.FeedbackStats{}, nil
+}
 func (f *fakeStore) UpsertStoplist(ctx context.Context, tokens []string) error { return nil }
 func (f *fakeStore) UpsertDictEntry(ctx context.Context, phrase, canonical, category string) error {
 	return nil

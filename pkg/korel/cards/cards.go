@@ -36,12 +36,19 @@ type SourceRef struct {
 	Time time.Time
 }
 
+// PMIPair is a typed representation of a token co-occurrence pair with its PMI score.
+type PMIPair struct {
+	TokenA string
+	TokenB string
+	PMI    float64
+}
+
 // Explain provides transparency into retrieval
 type Explain struct {
 	QueryTokens     []string
 	MatchedTokens   []string
 	CategoryOverlap []string
-	TopPairs        [][3]interface{}
+	TopPairs        []PMIPair
 }
 
 // ScoredDoc represents a document with its score
@@ -57,7 +64,7 @@ type ScoredDoc struct {
 }
 
 // Build creates a card from top-ranked documents
-func (b *Builder) Build(title string, docs []ScoredDoc, query rank.Query, topPairs [][3]interface{}) Card {
+func (b *Builder) Build(title string, docs []ScoredDoc, query rank.Query, topPairs []PMIPair) Card {
 	card := Card{
 		ID:             ulid.MustNew(ulid.Now(), b.entropy).String(),
 		Title:          title,
@@ -73,7 +80,7 @@ func (b *Builder) Build(title string, docs []ScoredDoc, query rank.Query, topPai
 	}
 
 	// Aggregate scores and collect only query-relevant tokens
-	pmiSum, catsSum, recSum, authSum, lenSum := 0.0, 0.0, 0.0, 0.0, 0.0
+	pmiSum, bm25Sum, titleSum, catsSum, recSum, authSum, lenSum := 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 	matchedTokens := make(map[string]struct{})
 	queryTokenSet := make(map[string]struct{})
 	for _, qt := range query.Tokens {
@@ -91,6 +98,8 @@ func (b *Builder) Build(title string, docs []ScoredDoc, query rank.Query, topPai
 
 		// Aggregate breakdown
 		pmiSum += doc.Breakdown.PMI
+		bm25Sum += doc.Breakdown.BM25
+		titleSum += doc.Breakdown.Title
 		catsSum += doc.Breakdown.Cats
 		recSum += doc.Breakdown.Recency
 		authSum += doc.Breakdown.Authority
@@ -108,6 +117,8 @@ func (b *Builder) Build(title string, docs []ScoredDoc, query rank.Query, topPai
 	n := float64(len(docs))
 	if n > 0 {
 		card.ScoreBreakdown["pmi"] = pmiSum / n
+		card.ScoreBreakdown["bm25"] = bm25Sum / n
+		card.ScoreBreakdown["title"] = titleSum / n
 		card.ScoreBreakdown["cats"] = catsSum / n
 		card.ScoreBreakdown["recency"] = recSum / n
 		card.ScoreBreakdown["authority"] = authSum / n

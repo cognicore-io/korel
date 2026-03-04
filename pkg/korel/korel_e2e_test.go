@@ -546,6 +546,18 @@ func (m *mockStoreForE2E) DeleteEdgesBySource(ctx context.Context, source string
 	return nil
 }
 func (m *mockStoreForE2E) AllEdges(ctx context.Context) ([]store.Edge, error) { return nil, nil }
+func (m *mockStoreForE2E) GetDocsByTokensInRange(ctx context.Context, tokens []string, since, until time.Time, limit int) ([]store.Doc, error) {
+	return m.GetDocsByTokens(ctx, tokens, limit)
+}
+func (m *mockStoreForE2E) GetDocsByEntity(ctx context.Context, entityType, entityValue string, limit int) ([]store.Doc, error) {
+	return nil, nil
+}
+func (m *mockStoreForE2E) RecordFeedback(ctx context.Context, sessionID, queryHash, cardID, action string, ts time.Time) error {
+	return nil
+}
+func (m *mockStoreForE2E) GetFeedbackStats(ctx context.Context) (store.FeedbackStats, error) {
+	return store.FeedbackStats{}, nil
+}
 
 // queryStoreAdapter adapts store.Store to query.Store interface
 type queryStoreAdapter struct {
