@@ -32,15 +32,26 @@ func (t *Tokenizer) SetLexicon(lex *lexicon.Lexicon) {
 // Tokenize splits text into normalized tokens, removing stopwords.
 // If a lexicon is set, tokens are normalized to their canonical forms.
 func (t *Tokenizer) Tokenize(text string) []string {
+	return t.tokenize(text, true)
+}
+
+// TokenizeKeepStopwords splits text into normalized tokens WITHOUT removing
+// stopwords. Used by the pipeline so multi-token recognition can match phrases
+// like "open source" before stopword removal discards component words.
+func (t *Tokenizer) TokenizeKeepStopwords(text string) []string {
+	return t.tokenize(text, false)
+}
+
+func (t *Tokenizer) tokenize(text string, removeStopwords bool) []string {
 	var tokens []string
 	var current strings.Builder
 
 	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '-' {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '-' || r == '\'' {
 			current.WriteRune(unicode.ToLower(r))
 		} else {
 			if current.Len() > 0 {
-				word := t.processToken(current.String())
+				word := t.processTokenOpt(current.String(), removeStopwords)
 				if word != "" {
 					tokens = append(tokens, word)
 				}
@@ -51,7 +62,7 @@ func (t *Tokenizer) Tokenize(text string) []string {
 
 	// Don't forget the last token
 	if current.Len() > 0 {
-		word := t.processToken(current.String())
+		word := t.processTokenOpt(current.String(), removeStopwords)
 		if word != "" {
 			tokens = append(tokens, word)
 		}
@@ -62,6 +73,10 @@ func (t *Tokenizer) Tokenize(text string) []string {
 
 // processToken applies cleaning, lexicon normalization, and stopword filtering.
 func (t *Tokenizer) processToken(token string) string {
+	return t.processTokenOpt(token, true)
+}
+
+func (t *Tokenizer) processTokenOpt(token string, removeStopwords bool) string {
 	// Step 1: Clean (remove leading/trailing hyphens, etc.)
 	word := t.cleanToken(token)
 	if word == "" || len(word) <= 1 {
@@ -80,15 +95,21 @@ func (t *Tokenizer) processToken(token string) string {
 	}
 
 	// Step 3: Check stopwords
-	if t.isStopword(word) {
+	if removeStopwords && t.isStopword(word) {
 		return ""
 	}
 
 	return word
 }
 
-// cleanToken strips leading/trailing hyphens and normalizes consecutive hyphens
+// cleanToken strips leading/trailing hyphens, normalizes consecutive hyphens,
+// and removes contraction suffixes (e.g., "i've" → "i", "they're" → "they").
 func (t *Tokenizer) cleanToken(token string) string {
+	// Strip contraction suffix: everything from apostrophe onward
+	if idx := strings.IndexByte(token, '\''); idx >= 0 {
+		token = token[:idx]
+	}
+
 	// Strip leading and trailing hyphens
 	token = strings.Trim(token, "-")
 
@@ -108,6 +129,19 @@ func isNumericOnly(s string) bool {
 		}
 	}
 	return true
+}
+
+// FilterStopwords removes stopwords from a token list, but preserves
+// multi-word tokens (they were already matched as dictionary phrases).
+func (t *Tokenizer) FilterStopwords(tokens []string) []string {
+	out := tokens[:0]
+	for _, tok := range tokens {
+		// Multi-word tokens (from parser) are always kept
+		if strings.Contains(tok, " ") || !t.isStopword(tok) {
+			out = append(out, tok)
+		}
+	}
+	return out
 }
 
 func (t *Tokenizer) isStopword(word string) bool {

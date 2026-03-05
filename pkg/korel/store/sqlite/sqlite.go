@@ -15,6 +15,11 @@ type sqliteStore struct {
 	db     *sql.DB
 	pmiCfg pmi.Config
 	calc   *pmi.Calculator
+
+	// Cached corpus stats (computed once, cleared on UpsertDoc)
+	cachedDocCount int64
+	cachedAvgLen   float64
+	statsValid     bool
 }
 
 // OpenSQLite opens a SQLite database with WAL mode enabled.

@@ -130,6 +130,16 @@ func (k *Korel) isConcept(token string) bool {
 	return ok
 }
 
+// getPMICalculator returns a function that computes PMI/NPMI from raw counts.
+// Used for batch PMI computation in search where we preload all co-occurrence data.
+func (k *Korel) getPMICalculator() func(co, dfA, dfB, total int64) float64 {
+	calc := pmi.NewCalculatorFromConfig(k.pmiCfg)
+	useNPMI := k.pmiCfg.UseNPMI
+	return func(co, dfA, dfB, total int64) float64 {
+		return calc.Score(co, dfA, dfB, total, useNPMI)
+	}
+}
+
 func uniqueStrings(in []string) []string {
 	set := make(map[string]struct{}, len(in))
 	var out []string

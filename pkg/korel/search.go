@@ -185,8 +185,11 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 	}
 
 	// Expand via PMI co-occurrence statistics (corpus-driven discovery)
-	pmiExpanded := k.expandViaPMI(ctx, processed.Tokens)
-	expanded = uniqueStrings(append(expanded, pmiExpanded...))
+	// Skip when PMI weight is zero — no value in expanding if we won't score it.
+	if k.weights.AlphaPMI > 0 {
+		pmiExpanded := k.expandViaPMI(ctx, processed.Tokens)
+		expanded = uniqueStrings(append(expanded, pmiExpanded...))
+	}
 
 	if req.TopK <= 0 {
 		req.TopK = 3
@@ -246,53 +249,88 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 		IotaTitle:    k.weights.IotaTitle,
 	}, k.halfLife, rank.WithCorpusStats(corpusStats))
 
-	pmiFunc := func(qt, dt string) float64 {
-		val, ok, err := k.store.GetPMI(ctx, qt, dt)
-		if err != nil || !ok {
-			return 0
+	// Collect all unique tokens from query + candidate docs for batch preloading.
+	allTokens := make(map[string]struct{}, len(processed.Tokens)+len(docs)*20)
+	for _, qt := range processed.Tokens {
+		allTokens[qt] = struct{}{}
+	}
+	for _, doc := range docs {
+		for _, dt := range doc.Tokens {
+			allTokens[dt] = struct{}{}
 		}
-		return val
 	}
 
-	// Compute damping map for query tokens based on neighbor counts.
+	// Batch preload DF values for all tokens.
+	tokenList := make([]string, 0, len(allTokens))
+	for t := range allTokens {
+		tokenList = append(tokenList, t)
+	}
+	dfMap, _ := k.store.GetTokenDFBatch(ctx, tokenList)
+	if dfMap == nil {
+		dfMap = make(map[string]int64)
+	}
+	dfFunc := func(token string) int64 {
+		return dfMap[token]
+	}
+
+	// PMI scoring: only preload co-occurrence data when PMI weight > 0.
+	var pmiFunc func(qt, dt string) float64
 	dampingMap := make(map[string]float64, len(processed.Tokens))
-	dampCfg := signals.DefaultDampingConfig()
-	for _, qt := range processed.Tokens {
-		neighbors, err := k.store.TopNeighbors(ctx, qt, 0) // 0 = return all
-		if err != nil {
+
+	if k.weights.AlphaPMI > 0 {
+		// Batch preload co-occurrence counts for query tokens vs all doc tokens.
+		totalDocs, _ := k.store.DocCount(ctx)
+		pmiCalc := k.getPMICalculator()
+		coMap, _ := k.store.GetPairsBatch(ctx, processed.Tokens, tokenList)
+		if coMap == nil {
+			coMap = make(map[[2]string]int64)
+		}
+		pmiFunc = func(qt, dt string) float64 {
+			if qt == dt {
+				return 0
+			}
+			a, b := qt, dt
+			if a > b {
+				a, b = b, a
+			}
+			co := coMap[[2]string{a, b}]
+			if co == 0 {
+				return 0
+			}
+			dfA := dfMap[qt]
+			dfB := dfMap[dt]
+			if dfA == 0 || dfB == 0 || totalDocs == 0 {
+				return 0
+			}
+			return pmiCalc(co, dfA, dfB, totalDocs)
+		}
+
+		// Compute damping map for query tokens based on neighbor counts.
+		dampCfg := signals.DefaultDampingConfig()
+		for _, qt := range processed.Tokens {
+			neighbors, err := k.store.TopNeighbors(ctx, qt, 20)
+			if err != nil {
+				dampingMap[qt] = 1.0
+				continue
+			}
+			vocabSize := len(docs) * 10
+			dampingMap[qt] = signals.ComputeDamping(qt, &searchDensityProvider{
+				neighborCount: len(neighbors),
+				vocabSize:     vocabSize,
+			}, dampCfg).DampingFactor
+		}
+	} else {
+		// No PMI scoring — return 0 for all pairs.
+		pmiFunc = func(qt, dt string) float64 { return 0 }
+		for _, qt := range processed.Tokens {
 			dampingMap[qt] = 1.0
-			continue
 		}
-		density := signals.TokenDensity{
-			Token:         qt,
-			NeighborCount: len(neighbors),
-			DampingFactor: 1.0,
-		}
-		// Estimate vocab size from number of unique tokens across candidate docs.
-		vocabSize := len(docs) * 10 // rough estimate
-		if vocabSize > 0 {
-			density.DensityRatio = float64(len(neighbors)) / float64(vocabSize)
-		}
-		density.DampingFactor = signals.ComputeDamping(qt, &searchDensityProvider{
-			neighborCount: len(neighbors),
-			vocabSize:     vocabSize,
-		}, dampCfg).DampingFactor
-		dampingMap[qt] = density.DampingFactor
 	}
 
 	scoredDocs := make([]scored, 0, len(docs))
 	now := req.Now
 	if now.IsZero() {
 		now = time.Now()
-	}
-
-	// DF lookup function for BM25 IDF computation
-	dfFunc := func(token string) int64 {
-		df, err := k.store.GetTokenDF(ctx, token)
-		if err != nil {
-			return 0
-		}
-		return df
 	}
 
 	for _, doc := range docs {

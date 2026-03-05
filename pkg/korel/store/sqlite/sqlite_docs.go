@@ -55,6 +55,7 @@ RETURNING id;
 		return err
 	}
 
+	s.statsValid = false // invalidate cached corpus stats
 	return tx.Commit()
 }
 
@@ -150,25 +151,44 @@ func (s *sqliteStore) GetDocByURL(ctx context.Context, url string) (store.Doc, b
 	return doc, true, nil
 }
 
-// DocCount returns the total number of documents.
+// DocCount returns the total number of documents (cached after first call).
 func (s *sqliteStore) DocCount(ctx context.Context) (int64, error) {
-	var n int64
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM docs").Scan(&n)
-	return n, err
-}
-
-// AvgDocLen returns the average number of unique tokens per document.
-func (s *sqliteStore) AvgDocLen(ctx context.Context) (float64, error) {
-	var avg sql.NullFloat64
-	err := s.db.QueryRowContext(ctx,
-		"SELECT AVG(cnt) FROM (SELECT COUNT(*) AS cnt FROM doc_tokens GROUP BY doc_id)").Scan(&avg)
-	if err != nil {
+	if s.statsValid {
+		return s.cachedDocCount, nil
+	}
+	if err := s.warmStats(ctx); err != nil {
 		return 0, err
 	}
-	if !avg.Valid {
-		return 0, nil
+	return s.cachedDocCount, nil
+}
+
+// AvgDocLen returns the average number of unique tokens per document (cached after first call).
+func (s *sqliteStore) AvgDocLen(ctx context.Context) (float64, error) {
+	if s.statsValid {
+		return s.cachedAvgLen, nil
 	}
-	return avg.Float64, nil
+	if err := s.warmStats(ctx); err != nil {
+		return 0, err
+	}
+	return s.cachedAvgLen, nil
+}
+
+func (s *sqliteStore) warmStats(ctx context.Context) error {
+	var n int64
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM docs").Scan(&n); err != nil {
+		return err
+	}
+	var avg sql.NullFloat64
+	if err := s.db.QueryRowContext(ctx,
+		"SELECT AVG(cnt) FROM (SELECT COUNT(*) AS cnt FROM doc_tokens GROUP BY doc_id)").Scan(&avg); err != nil {
+		return err
+	}
+	s.cachedDocCount = n
+	if avg.Valid {
+		s.cachedAvgLen = avg.Float64
+	}
+	s.statsValid = true
+	return nil
 }
 
 // GetDocsByTokens retrieves documents containing any of the given tokens
@@ -206,20 +226,19 @@ LIMIT ?;
 	}
 	defer rows.Close()
 
-	var results []store.Doc
+	var ids []int64
 	for rows.Next() {
 		var id int64
 		var matchCount int
 		if err := rows.Scan(&id, &matchCount); err != nil {
 			return nil, err
 		}
-		doc, err := s.loadDoc(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, doc)
+		ids = append(ids, id)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return s.loadDocsBatch(ctx, ids)
 }
 
 // GetDocsByTokensInRange retrieves documents containing any of the given tokens
@@ -335,6 +354,123 @@ LIMIT ?;`
 		results = append(results, doc)
 	}
 	return results, rows.Err()
+}
+
+// loadDocsBatch loads multiple documents efficiently using batch queries instead of N+1.
+func (s *sqliteStore) loadDocsBatch(ctx context.Context, ids []int64) ([]store.Doc, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	// Build placeholders
+	ph := strings.Repeat("?,", len(ids))
+	ph = strings.TrimSuffix(ph, ",")
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+
+	// 1. Load all doc metadata in one query
+	docMap := make(map[int64]*store.Doc, len(ids))
+	orderMap := make(map[int64]int, len(ids))
+	for i, id := range ids {
+		orderMap[id] = i
+	}
+
+	q := fmt.Sprintf(`SELECT id, url, title, COALESCE(body_snippet, ''), outlet, published_at, links_out FROM docs WHERE id IN (%s)`, ph)
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var doc store.Doc
+		var published string
+		if err := rows.Scan(&doc.ID, &doc.URL, &doc.Title, &doc.BodySnippet, &doc.Outlet, &published, &doc.LinksOut); err != nil {
+			return nil, err
+		}
+		if published != "" {
+			if parsed, perr := time.Parse(time.RFC3339, published); perr == nil {
+				doc.PublishedAt = parsed
+			}
+		}
+		docMap[doc.ID] = &doc
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// 2. Load all tokens in one query
+	q = fmt.Sprintf(`SELECT doc_id, token FROM doc_tokens WHERE doc_id IN (%s)`, ph)
+	trows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer trows.Close()
+	for trows.Next() {
+		var docID int64
+		var token string
+		if err := trows.Scan(&docID, &token); err != nil {
+			return nil, err
+		}
+		if doc, ok := docMap[docID]; ok {
+			doc.Tokens = append(doc.Tokens, token)
+		}
+	}
+	if err := trows.Err(); err != nil {
+		return nil, err
+	}
+
+	// 3. Load all categories in one query
+	q = fmt.Sprintf(`SELECT doc_id, category FROM doc_cats WHERE doc_id IN (%s)`, ph)
+	crows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer crows.Close()
+	for crows.Next() {
+		var docID int64
+		var cat string
+		if err := crows.Scan(&docID, &cat); err != nil {
+			return nil, err
+		}
+		if doc, ok := docMap[docID]; ok {
+			doc.Cats = append(doc.Cats, cat)
+		}
+	}
+	if err := crows.Err(); err != nil {
+		return nil, err
+	}
+
+	// 4. Load all entities in one query
+	q = fmt.Sprintf(`SELECT doc_id, type, value FROM doc_entities WHERE doc_id IN (%s)`, ph)
+	erows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer erows.Close()
+	for erows.Next() {
+		var docID int64
+		var ent store.Entity
+		if err := erows.Scan(&docID, &ent.Type, &ent.Value); err != nil {
+			return nil, err
+		}
+		if doc, ok := docMap[docID]; ok {
+			doc.Ents = append(doc.Ents, ent)
+		}
+	}
+	if err := erows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Preserve original order
+	results := make([]store.Doc, 0, len(ids))
+	for _, id := range ids {
+		if doc, ok := docMap[id]; ok {
+			results = append(results, *doc)
+		}
+	}
+	return results, nil
 }
 
 func (s *sqliteStore) loadDoc(ctx context.Context, id int64) (store.Doc, error) {

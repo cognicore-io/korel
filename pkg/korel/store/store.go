@@ -27,9 +27,11 @@ type Store interface {
 	// Tokens & Counts
 	UpsertTokenDF(ctx context.Context, token string, df int64) error
 	GetTokenDF(ctx context.Context, token string) (int64, error)
+	GetTokenDFBatch(ctx context.Context, tokens []string) (map[string]int64, error)
 	IncPair(ctx context.Context, t1, t2 string) error
 	DecPair(ctx context.Context, t1, t2 string) error
 	GetPMI(ctx context.Context, t1, t2 string) (float64, bool, error)
+	GetPairsBatch(ctx context.Context, queryTokens, docTokens []string) (map[[2]string]int64, error)
 	TopNeighbors(ctx context.Context, token string, k int) ([]Neighbor, error) // k <= 0 returns all
 	AllTokens(ctx context.Context) ([]string, error)
 

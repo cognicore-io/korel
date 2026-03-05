@@ -22,6 +22,7 @@ type Components struct {
 	Parser    *ingest.MultiTokenParser
 	Taxonomy  *ingest.Taxonomy
 	Rules     string
+	Stopwords []string // raw stopword list for persistence to store
 }
 
 // Load reads all configuration files and returns initialized components
@@ -35,6 +36,7 @@ func (l *Loader) Load() (*Components, error) {
 			return nil, fmt.Errorf("load stoplist: %w", err)
 		}
 		comp.Tokenizer = ingest.NewTokenizer(stoplist.Terms)
+		comp.Stopwords = stoplist.Terms
 	} else {
 		comp.Tokenizer = ingest.NewTokenizer([]string{})
 	}

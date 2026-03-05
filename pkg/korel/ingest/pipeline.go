@@ -63,13 +63,17 @@ func (p *Pipeline) DictEntries() []DictEntry {
 
 // Process runs a document through the full ingestion pipeline
 func (p *Pipeline) Process(text string) ProcessedDoc {
-	// 1. Tokenize (remove stopwords, normalize case)
-	tokens := p.tokenizer.Tokenize(text)
+	// 1. Tokenize WITHOUT removing stopwords — multi-token phrases like
+	// "open source" need all component words present for matching.
+	raw := p.tokenizer.TokenizeKeepStopwords(text)
 
 	// 2. Multi-token recognition (greedy longest match)
-	tokens = p.parser.Parse(tokens)
+	tokens := p.parser.Parse(raw)
 
-	// 3. Taxonomy tagging
+	// 3. Remove remaining stopwords (words not consumed by multi-token match)
+	tokens = p.tokenizer.FilterStopwords(tokens)
+
+	// 4. Taxonomy tagging
 	categories := p.taxonomy.AssignCategories(tokens)
 	entities := p.taxonomy.ExtractEntities(text)
 
