@@ -88,8 +88,8 @@ pkg/korel/
 ├── ingest/           # Tokenization with lexicon integration
 │   ├── tokenizer.go   # 3-stage: clean → normalize → filter
 │   └── tokenizer_test.go
-cmd/bootstrap/         # Auto-generate lexicon from corpus
-    └── main.go        # Synonym candidate discovery
+cmd/korel/             # Unified CLI
+    └── cmd_bootstrap.go  # Auto-generate lexicon from corpus
 ```
 
 ### Data Flow

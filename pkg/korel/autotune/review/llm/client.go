@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -51,6 +52,31 @@ func (c *Client) Approve(ctx context.Context, cand stoplist.Candidate) (bool, er
 		return false, err
 	}
 	return resp.Approve, nil
+}
+
+// ReviewStopwords filters candidates through the LLM reviewer.
+// If limit > 0, only the first limit candidates are reviewed; the rest pass through.
+// Returns nil if the client has no endpoint configured.
+func (c *Client) ReviewStopwords(ctx context.Context, candidates []stoplist.Candidate, limit int) []stoplist.Candidate {
+	if c.Endpoint == "" {
+		return candidates
+	}
+	var result []stoplist.Candidate
+	for i, cand := range candidates {
+		if limit > 0 && i >= limit {
+			result = append(result, cand)
+			continue
+		}
+		ok, err := c.Approve(ctx, cand)
+		if err != nil {
+			log.Printf("review error for %s: %v", cand.Token, err)
+			continue
+		}
+		if ok {
+			result = append(result, cand)
+		}
+	}
+	return result
 }
 
 // ApproveTaxonomy implements taxonomy.Reviewer.

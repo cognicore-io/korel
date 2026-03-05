@@ -9,19 +9,19 @@ echo
 
 # Step 1: Download
 echo "📥 Step 1: Downloading HN stories..."
-go run ./cmd/download-hn 100
+go run ./cmd/korel download hn 100
 echo
 
 # Step 2: Index (when implemented)
 echo "🔨 Step 2: Indexing data..."
 echo "   [TODO: Implement indexer pipeline]"
-echo "   Run: go run ./cmd/rss-indexer --data=testdata/hn/docs.jsonl"
+echo "   Run: go run ./cmd/korel index --data=testdata/hn/docs.jsonl"
 echo
 
 # Step 3: Query (when implemented)
 echo "🔍 Step 3: Try searching..."
 echo "   [TODO: Implement search]"
-echo "   Run: go run ./cmd/chat-cli"
+echo "   Run: go run ./cmd/korel search"
 echo "   Example queries:"
 echo "     - machine learning framework"
 echo "     - startup funding"

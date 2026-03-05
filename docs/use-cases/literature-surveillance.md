@@ -17,7 +17,7 @@ Korel works with any JSONL corpus. For academic papers, the arXiv downloader is 
 
 ```bash
 # Download AI research papers
-go run ./cmd/download-arxiv cs.AI 500
+go run ./cmd/korel download arxiv cs.AI 500
 
 # Or prepare custom corpus from PubMed/clinical sources
 # Format: {"url": "...", "title": "...", "text": "...", "published_at": "..."}
@@ -26,7 +26,7 @@ go run ./cmd/download-arxiv cs.AI 500
 Bootstrap domain-specific configuration:
 
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   -input data/pubmed-cardiology.jsonl \
   -domain cardiology \
   -output configs/cardiology
@@ -40,7 +40,7 @@ This discovers:
 ### 2. Index and Search
 
 ```bash
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/cardiology.db \
   -data data/pubmed-cardiology.jsonl \
   -stoplist configs/cardiology/stoplist.yaml \
@@ -113,7 +113,7 @@ For systematic reviews and regulatory submissions, deterministic results are cri
 
 ```bash
 # Run search today
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/cardiology.db \
   -stoplist configs/cardiology/stoplist.yaml \
   -dict configs/cardiology/tokens.dict \

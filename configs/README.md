@@ -14,10 +14,10 @@ Base stopword lists are used during bootstrap to filter out common words when ge
 
 ```bash
 # Use default English stopwords
-go run ./cmd/bootstrap --input=corpus.jsonl --domain=mydomain --output=configs/mydomain/
+go run ./cmd/korel bootstrap --input=corpus.jsonl --domain=mydomain --output=configs/mydomain/
 
 # Use custom or different language stopwords
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=corpus.jsonl \
   --domain=mydomain \
   --output=configs/mydomain/ \
@@ -95,7 +95,7 @@ Benefits:
 The bootstrap tool can suggest synonym candidates based on corpus analysis:
 
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=corpus.jsonl \
   --domain=mydomain \
   --output=configs/mydomain/ \

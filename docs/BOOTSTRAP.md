@@ -13,7 +13,7 @@ When starting with a completely new corpus/domain, Korel can automatically gener
 ### Without LLM (Statistical Analysis Only)
 
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=testdata/hn/docs.jsonl \
   --domain=hn \
   --output=configs/hn/ \
@@ -43,7 +43,7 @@ Bootstrap configs written to configs/hn/
 ### With LLM Review (Recommended)
 
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=testdata/hn/docs.jsonl \
   --output=configs/hn/ \
   --iterations=2 \
@@ -68,7 +68,7 @@ go run ./cmd/bootstrap \
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 1: Bootstrap (1 command, ~30 seconds)                  │
 ├─────────────────────────────────────────────────────────────┤
-│ go run ./cmd/bootstrap --input=data.jsonl --output=configs/ │
+│ go run ./cmd/korel bootstrap --input=data.jsonl --output=configs/ │
 │                                                               │
 │ → Analyzes corpus (DF, PMI, clustering)                     │
 │ → Generates configs automatically                            │
@@ -81,13 +81,13 @@ go run ./cmd/bootstrap \
 │ vim configs/bootstrap-reviewed.json                         │
 │                                                               │
 │ → Edit single JSON file (not 3+ YAML files)                 │
-│ → Re-apply: go run ./cmd/bootstrap --apply=reviewed.json    │
+│ → Re-apply: go run ./cmd/korel bootstrap --apply=reviewed.json    │
 └─────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 3: Ingest (~10 seconds for 50 docs)                    │
 ├─────────────────────────────────────────────────────────────┤
-│ go run ./cmd/rss-indexer --db=data.db --data=data.jsonl ... │
+│ go run ./cmd/korel index --db=data.db --data=data.jsonl ... │
 │                                                               │
 │ → Uses generated configs                                     │
 │ → Builds PMI statistics                                      │
@@ -96,7 +96,7 @@ go run ./cmd/bootstrap \
 ┌─────────────────────────────────────────────────────────────┐
 │ Step 4: Query (instant)                                      │
 ├─────────────────────────────────────────────────────────────┤
-│ go run ./cmd/chat-cli --db=data.db --query="search term"    │
+│ go run ./cmd/korel search --db=data.db --query="search term"    │
 │                                                               │
 │ → Retrieves with explainable results                        │
 └─────────────────────────────────────────────────────────────┘
@@ -446,7 +446,7 @@ configs/hn/
 vim configs/hn/bootstrap-reviewed.json
 
 # 2. Regenerate YAML files
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --apply=configs/hn/bootstrap-reviewed.json \
   --output=configs/hn/
 ```
@@ -459,7 +459,7 @@ go run ./cmd/bootstrap \
 
 ```bash
 # Creates minimal bootstrap configs internally
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=new-corpus.jsonl \
   --output=configs/newdomain/
 ```
@@ -472,7 +472,7 @@ go run ./cmd/bootstrap \
 ### Mode 2: With Existing Minimal Configs
 
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=data.jsonl \
   --output=configs/domain/ \
   --stoplist=testdata/bootstrap/stoplist.yaml \
@@ -486,7 +486,7 @@ go run ./cmd/bootstrap \
 
 ```bash
 # Bootstrap already ran, now re-apply edits
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --apply=configs/hn/bootstrap-reviewed.json \
   --output=configs/hn/
 ```
@@ -687,10 +687,10 @@ go run ./cmd/bootstrap \
 
 ```bash
 # 1. Download data
-go run ./cmd/download-hn 200
+go run ./cmd/korel download hn 200
 
 # 2. Bootstrap with LLM review
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=testdata/hn/docs.jsonl \
   --output=configs/hn/ \
   --llm-config=configs/bootstrap-llm.yaml
@@ -709,7 +709,7 @@ go run ./cmd/bootstrap \
 cat configs/hn/bootstrap-reviewed.json
 
 # 4. Ingest
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   --db=./data/hn.db \
   --data=testdata/hn/docs.jsonl \
   --stoplist=configs/hn/stoplist.yaml \
@@ -717,7 +717,7 @@ go run ./cmd/rss-indexer \
   --taxonomy=configs/hn/taxonomies.yaml
 
 # 5. Query
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   --db=./data/hn.db \
   --stoplist=configs/hn/stoplist.yaml \
   --dict=configs/hn/tokens.dict \
@@ -736,7 +736,7 @@ Bootstrap provides extensive configurability for different corpus sizes, languag
 **Cold Start (No Base Stoplist)**
 ```bash
 # True language-agnostic cold start - discover all stopwords from corpus
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=corpus.jsonl \
   --domain=mydomain \
   --no-base-stoplist \
@@ -751,7 +751,7 @@ cat > configs/stopwords-de.yaml << 'EOF'
 terms: [der, die, das, den, dem, des, ...]
 EOF
 
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=german-corpus.jsonl \
   --base-stoplist=configs/stopwords-de.yaml \
   --output=configs/de/
@@ -762,7 +762,7 @@ go run ./cmd/bootstrap \
 **Clustering Thresholds**
 ```bash
 # Adjust for small corpora (<100 docs)
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=small-corpus.jsonl \
   --taxonomy-min-support=1 \    # Default: 3
   --taxonomy-min-pmi=0.3 \       # Default: 0.8
@@ -781,7 +781,7 @@ terms:
   # These might be signal in medical domain, noise in finance
 EOF
 
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=finance-corpus.jsonl \
   --taxonomy-blacklist=configs/finance-blacklist.yaml \
   --output=configs/finance/
@@ -790,7 +790,7 @@ go run ./cmd/bootstrap \
 **Fail Fast on Empty Taxonomy**
 ```bash
 # Require LLM taxonomy if clustering fails (no silent fallbacks)
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=corpus.jsonl \
   --require-taxonomy-llm \
   --taxonomy-llm-base=http://localhost:11434/v1 \
@@ -803,7 +803,7 @@ Without `--require-taxonomy-llm`, bootstrap falls back to high-frequency keyword
 ### Multi-Token Phrase Control
 
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=corpus.jsonl \
   --pair-min-support=5 \     # Default: 3 (min docs containing pair)
   --pair-min-pmi=1.5 \       # Default: 1.0 (semantic strength threshold)
@@ -842,7 +842,7 @@ go run ./cmd/bootstrap \
 
 **Non-English Corpus (German)**
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=german-papers.jsonl \
   --base-stoplist=configs/stopwords-de.yaml \
   --taxonomy-blacklist=configs/german-generics.yaml \
@@ -852,7 +852,7 @@ go run ./cmd/bootstrap \
 
 **Small Corpus (<100 docs) with LLM**
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=small-corpus.jsonl \
   --taxonomy-min-support=1 \
   --taxonomy-min-pmi=0.3 \
@@ -864,7 +864,7 @@ go run ./cmd/bootstrap \
 
 **Finance Domain (Custom Blacklist)**
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=finance-news.jsonl \
   --taxonomy-blacklist=configs/finance-blacklist.yaml \
   --domain=finance \
@@ -873,7 +873,7 @@ go run ./cmd/bootstrap \
 
 **Production (Strict Mode - No Silent Fallbacks)**
 ```bash
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   --input=corpus.jsonl \
   --require-taxonomy-llm \
   --taxonomy-llm-base=https://api.openai.com/v1 \
@@ -971,7 +971,7 @@ transitive_related(X, Z, Score) :-
 
 **Integration with search:**
 ```bash
-go run ./cmd/chat-cli --rules=configs/rules/auto.prolog --query="bert"
+go run ./cmd/korel search --rules=configs/rules/auto.prolog --query="bert"
 # Query expansion: bert → transformer → nlp → [related terms]
 # Explainable reasoning with proof chains
 ```

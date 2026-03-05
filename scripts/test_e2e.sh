@@ -18,7 +18,7 @@ mkdir -p data/snapshots
 
 # Index
 echo "Running indexer..."
-go run ./cmd/rss-indexer || {
+go run ./cmd/korel index || {
     echo "Indexer failed"
     exit 1
 }
@@ -29,7 +29,7 @@ echo
 
 # Test queries (automated)
 echo "Testing sample queries..."
-echo "feed-in tariff Italy" | go run ./cmd/chat-cli
+echo "feed-in tariff Italy" | go run ./cmd/korel search
 
 echo
 echo "=== E2E Test Complete ==="

@@ -45,7 +45,7 @@ func (c *Cleaner) Clean(ctx context.Context) (Result, error) {
 		}
 		res.Processed++
 
-		processed := c.Pipeline.Process(doc.Title + " " + doc.URL) // placeholder: real impl should use body
+		processed := c.Pipeline.Process(doc.Title + " " + doc.BodySnippet)
 		if slicesEqual(processed.Tokens, doc.Tokens) {
 			continue
 		}

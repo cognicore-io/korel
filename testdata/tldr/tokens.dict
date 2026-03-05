@@ -1,0 +1,96 @@
+# TLDR Tech News Dictionary
+# Format: canonical|category
+# Multi-token phrases recognized during ingestion
+
+# AI/ML
+machine learning|ai
+artificial intelligence|ai
+deep learning|ai
+neural network|ai
+large language model|ai
+natural language processing|ai
+computer vision|ai
+reinforcement learning|ai
+language model|ai
+transformer architecture|ai
+stable diffusion|ai
+generative ai|ai
+
+# Dev
+open source|dev
+software engineering|dev
+code review|dev
+pull request|dev
+version control|dev
+unit test|dev
+integration test|dev
+functional programming|dev
+design pattern|dev
+software architecture|dev
+agile development|dev
+package manager|dev
+build system|dev
+garbage collection|dev
+memory management|dev
+real time|dev
+
+# DevOps
+continuous integration|devops
+continuous deployment|devops
+cloud computing|devops
+distributed system|devops
+load balancer|devops
+service mesh|devops
+infrastructure as code|devops
+message queue|devops
+data pipeline|devops
+edge computing|devops
+cloud native|devops
+container orchestration|devops
+
+# Security
+security vulnerability|infosec
+zero day|infosec
+cross site scripting|infosec
+sql injection|infosec
+buffer overflow|infosec
+denial of service|infosec
+public key|infosec
+private key|infosec
+access control|infosec
+two factor|infosec
+certificate authority|infosec
+supply chain|infosec
+
+# Web
+web development|web
+full stack|web
+progressive web app|web
+user interface|web
+user experience|web
+responsive design|web
+web component|web
+search engine|web
+browser extension|web
+rest api|web
+
+# Crypto/Web3
+smart contract|crypto
+decentralized finance|crypto
+
+# Startup
+venture capital|startup
+series a|startup
+product market fit|startup
+minimum viable product|startup
+growth hacking|startup
+business model|startup
+customer acquisition|startup
+competitive advantage|startup
+
+# Database
+data warehouse|database
+data science|database
+data mining|database
+big data|database
+data visualization|database

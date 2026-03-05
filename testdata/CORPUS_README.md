@@ -74,21 +74,21 @@ Recent AI research papers including:
 
 ```bash
 # Hacker News (default: 100 stories)
-go run ./cmd/download-hn [count]
+go run ./cmd/korel download hn [count]
 
 # Examples:
-go run ./cmd/download-hn 50      # Download 50 stories
-go run ./cmd/download-hn 200     # Download 200 stories
+go run ./cmd/korel download hn 50      # Download 50 stories
+go run ./cmd/korel download hn 200     # Download 200 stories
 
 # arXiv AI papers (default: 200 papers)
-go run ./cmd/download-arxiv cs.AI [count]
+go run ./cmd/korel download arxiv cs.AI [count]
 
 # Examples:
-go run ./cmd/download-arxiv cs.AI 50    # 50 AI papers
-go run ./cmd/download-arxiv cs.CL 100   # 100 NLP papers
-go run ./cmd/download-arxiv cs.LG 100   # 100 ML papers
-go run ./cmd/download-arxiv econ.EM 50  # 50 Economics papers
-go run ./cmd/download-arxiv q-fin 50    # 50 Finance papers
+go run ./cmd/korel download arxiv cs.AI 50    # 50 AI papers
+go run ./cmd/korel download arxiv cs.CL 100   # 100 NLP papers
+go run ./cmd/korel download arxiv cs.LG 100   # 100 ML papers
+go run ./cmd/korel download arxiv econ.EM 50  # 50 Economics papers
+go run ./cmd/korel download arxiv q-fin 50    # 50 Finance papers
 ```
 
 **Output locations:**
@@ -99,7 +99,7 @@ go run ./cmd/download-arxiv q-fin 50    # 50 Finance papers
 
 **Step 1: Ingest HN corpus**
 ```bash
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/hn.db \
   -data testdata/hn/docs.jsonl \
   -stoplist testdata/hn/stoplist.yaml \
@@ -109,7 +109,7 @@ go run ./cmd/rss-indexer \
 
 **Step 2: Ingest arXiv corpus**
 ```bash
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/arxiv.db \
   -data testdata/arxiv/docs.jsonl \
   -stoplist testdata/hn/stoplist.yaml \
@@ -140,7 +140,7 @@ go run ./cmd/rss-indexer \
 
 **Query HN corpus:**
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/hn.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -157,7 +157,7 @@ go run ./cmd/chat-cli \
 
 **Query arXiv corpus:**
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/arxiv.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -175,7 +175,7 @@ go run ./cmd/chat-cli \
 **One-shot queries (non-interactive mode):**
 ```bash
 # Query HN corpus directly
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/hn.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -183,7 +183,7 @@ go run ./cmd/chat-cli \
   -query "open source"
 
 # Query arXiv corpus with custom topK
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/arxiv.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \

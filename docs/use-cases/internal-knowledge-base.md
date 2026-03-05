@@ -21,7 +21,7 @@ Convert internal docs to JSONL (one doc per line):
 # Format: {"url": "...", "title": "...", "text": "...", "published_at": "...", "outlet": "confluence"}
 
 # Bootstrap discovers your company's terminology
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   -input data/internal-docs.jsonl \
   -domain engineering \
   -output configs/internal
@@ -35,7 +35,7 @@ The bootstrap command discovers without any manual configuration:
 ### 2. Index the Corpus
 
 ```bash
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/internal.db \
   -data data/internal-docs.jsonl \
   -stoplist configs/internal/stoplist.yaml \
@@ -46,7 +46,7 @@ go run ./cmd/rss-indexer \
 ### 3. Search with Context
 
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/internal.db \
   -stoplist configs/internal/stoplist.yaml \
   -dict configs/internal/tokens.dict \

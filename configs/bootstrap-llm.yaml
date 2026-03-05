@@ -1,5 +1,5 @@
 # Bootstrap LLM Review Configuration
-# Used by: go run ./cmd/bootstrap --llm-config=configs/bootstrap-llm.yaml
+# Used by: go run ./cmd/korel bootstrap --llm-config=configs/bootstrap-llm.yaml
 
 # LLM endpoint (choose one)
 endpoint:

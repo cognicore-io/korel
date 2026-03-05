@@ -15,13 +15,19 @@ A research initiative by [cognicore.io](https://cognicore.io) – sistemica GmbH
 
 ```bash
 # Download Hacker News stories (100 articles, ~30 seconds)
-go run ./cmd/download-hn
+go run ./cmd/korel download hn
 
 # Or download arXiv papers (200 papers, ~60 seconds)
-go run ./cmd/download-arxiv cs.AI 200
+go run ./cmd/korel download arxiv cs.AI 200
 
-# Then index and search (when pipeline is implemented)
-# See QUICKSTART.md for full guide
+# Index a JSONL corpus and search
+# Index and search (see QUICKSTART.md for config setup)
+go run ./cmd/korel index -data data/hn.jsonl -db data/hn.db \
+  -stoplist configs/stoplist.yaml -dict configs/tokens.dict \
+  -taxonomy configs/taxonomies.yaml
+go run ./cmd/korel search -db data/hn.db -query "kubernetes security" \
+  -stoplist configs/stoplist.yaml -dict configs/tokens.dict \
+  -taxonomy configs/taxonomies.yaml
 ```
 
 **📖 [Read the Quick Start Guide →](QUICKSTART.md)**
@@ -156,7 +162,7 @@ Inspired by decades of proven research (IBM n-grams, expert systems, "web as cor
                           ↓
 ┌─────────────────────────────────────────────────────────┐
 │  Phase 6: LOAD – Index & Store                          │
-│  ├─ SQLite/Postgres with WAL mode                      │
+│  ├─ SQLite with WAL mode                                │
 │  ├─ Nested hash: token→docs, token→neighbors           │
 │  └─ Output: queryable index                             │
 └─────────────────────────────────────────────────────────┘
@@ -183,16 +189,16 @@ Inspired by decades of proven research (IBM n-grams, expert systems, "web as cor
 - **Autotune modules** (`pkg/korel/autotune/*`) analyze stored stats after ingestion to
   propose new stopwords, taxonomy keywords, symbolic rules, or entity entries. They can
   run fully automatic or hand suggestions to a human/LLM reviewer before committing.
-- **Maintenance jobs** (`pkg/korel/maintenance`) reprocess only the affected documents
-  (partial reindex). Newly approved stopwords are stripped from stored token arrays,
-  taxonomy/entity updates are applied, and symbolic rules are exported to the inference
-  engine—keeping the database lean without blocking the ingest path.
+- **Maintenance jobs** (`pkg/korel/maintenance`) reprocess documents through the updated
+  pipeline to strip newly discovered stopwords and apply taxonomy/entity changes. The
+  cleaner re-tokenizes each document's title and body snippet, updating stored tokens and
+  categories when they differ from the current pipeline output.
 
 ### Bootstrapping a New Corpus
 
 1. Run the bootstrap CLI to analyze a raw JSONL corpus and emit starter configs:
    ```bash
-   go run ./cmd/bootstrap \
+   go run ./cmd/korel bootstrap \
      -input testdata/hn/docs.jsonl \
      -domain tech \
      -output configs/tech
@@ -205,13 +211,13 @@ Inspired by decades of proven research (IBM n-grams, expert systems, "web as cor
    - `tokens.dict` - Multi-token phrases
    - `taxonomies.yaml` - Category structure
 3. Ingest the corpus with those configs, then rely on the autotune + maintenance loop for continuous refinement.
-4. Need a lightweight DF/entropy snapshot only? `cmd/korel-analytics` still provides that report without emitting files.
+4. Need a lightweight DF/entropy snapshot only? `korel analyze` provides that report without emitting files.
 
 ### AI Agents & RAG
 
 - Korel is a natural retrieval component inside tool-enabled agents.  Call `Search`
   to obtain explainable cards, then feed those facts to an LLM for synthesis.
-- `cmd/chat-cli` now supports optional OpenAI-compatible endpoints, demonstrating how
+- `korel search` now supports optional OpenAI-compatible endpoints, demonstrating how
   agents can combine Korel's deterministic retrieval with neural generation.
 - See [`docs/AGENT_INTEGRATION.md`](docs/AGENT_INTEGRATION.md) for detailed patterns,
   including MCP/tool wiring and suggestions for prompt templates.
@@ -300,12 +306,11 @@ pkg/korel/
 
 ### Use Cases
 
-**1. RSS Indexer** (`cmd/rss-indexer/`)
-- Crawls news feeds
+**1. Indexer** (`korel index`)
 - Ingests documents into Korel
 - Updates PMI scores incrementally
 
-**2. Chat CLI** (`cmd/chat-cli/`)
+**2. Search** (`korel search`)
 - Interactive Q&A interface
 - Queries Korel before LLM call
 - Shows explainable cards with sources
@@ -498,10 +503,10 @@ Download 50 Hacker News stories and 50 arXiv AI papers:
 
 ```bash
 # Download Hacker News tech stories (50 documents)
-go run ./cmd/download-hn 50
+go run ./cmd/korel download hn 50
 
 # Download arXiv AI research papers (50 documents)
-go run ./cmd/download-arxiv cs.AI 50
+go run ./cmd/korel download arxiv cs.AI 50
 ```
 
 **Output:**
@@ -518,7 +523,7 @@ wc -l testdata/hn/docs.jsonl testdata/arxiv/docs.jsonl
 
 ```bash
 # Ingest HN corpus into database
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/hn.db \
   -data testdata/hn/docs.jsonl \
   -stoplist testdata/hn/stoplist.yaml \
@@ -549,7 +554,7 @@ Ingested 20/50 documents
 
 ```bash
 # Ingest arXiv corpus into separate database
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/arxiv.db \
   -data testdata/arxiv/docs.jsonl \
   -stoplist testdata/hn/stoplist.yaml \
@@ -565,7 +570,7 @@ Now test retrieval with interactive queries:
 
 **Query Hacker News corpus:**
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/hn.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -584,7 +589,7 @@ go run ./cmd/chat-cli \
 
 **Query arXiv corpus:**
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/arxiv.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -606,7 +611,7 @@ For testing and automation, you can execute a single query without entering inte
 
 ```bash
 # Query with default topK=3
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/hn.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -614,7 +619,7 @@ go run ./cmd/chat-cli \
   -query "open source"
 
 # Query with custom topK
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/arxiv.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -699,7 +704,7 @@ If you already have indexed data:
 
 ```bash
 # Query existing database
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/hn.db \
   -stoplist testdata/hn/stoplist.yaml \
   -dict testdata/hn/tokens.dict \
@@ -797,7 +802,7 @@ used_for(transformer, nlp)
 related_to(bert, masked-language-modeling)
 ```
 
-Both `rss-indexer` and `chat-cli` accept an optional `-rules` flag. AutoTune also auto-generates `related_to` rules from high-PMI pairs.
+The `korel index` and `korel search` subcommands accept an optional `-rules` flag. AutoTune also auto-generates `related_to` rules from high-PMI pairs.
 
 ---
 

@@ -10,10 +10,10 @@ use it inside larger agent/RAG systems.
 3. Forward the retrieved cards (bullets + scores + sources) to any OpenAI-compatible
    LLM endpoint for natural-language summaries or downstream reasoning.
 
-### CLI Example (`cmd/ai-chat`)
+### CLI Example (`korel search --config`)
 
 ```bash
-go run ./cmd/ai-chat \
+go run ./cmd/korel search \
   -config configs/ai-chat.yaml \
   -query "What are the latest solar policy changes in Europe?"
 ```

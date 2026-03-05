@@ -1,12 +1,5 @@
 # Binaries
-/cmd/*/rss-indexer
-/cmd/*/chat-cli
-/cmd/*/bootstrap
-/cmd/*/korel-analytics
-/cmd/*/download-hn
-/cmd/*/download-arxiv
-/cmd/*/ai-chat
-/bootstrap
+/korel
 /lexicon-usage
 /examples/*/lexicon-usage
 *.exe

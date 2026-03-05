@@ -12,19 +12,19 @@ echo "📥 Step 1: Downloading arXiv papers..."
 echo "   Category: cs.AI (Artificial Intelligence)"
 echo "   Count: 200 papers"
 echo
-go run ./cmd/download-arxiv cs.AI 200
+go run ./cmd/korel download arxiv cs.AI 200
 echo
 
 # Step 2: Index (when implemented)
 echo "🔨 Step 2: Indexing papers..."
 echo "   [TODO: Implement indexer pipeline]"
-echo "   Run: go run ./cmd/rss-indexer --data=testdata/arxiv/docs.jsonl"
+echo "   Run: go run ./cmd/korel index --data=testdata/arxiv/docs.jsonl"
 echo
 
 # Step 3: Query (when implemented)
 echo "🔍 Step 3: Try searching..."
 echo "   [TODO: Implement search]"
-echo "   Run: go run ./cmd/chat-cli"
+echo "   Run: go run ./cmd/korel search"
 echo "   Example queries:"
 echo "     - transformer architecture attention"
 echo "     - reinforcement learning optimization"

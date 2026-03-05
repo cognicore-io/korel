@@ -19,10 +19,10 @@ go mod tidy
 
 ```bash
 # Download Hacker News stories
-go run ./cmd/download-hn 50
+go run ./cmd/korel download hn 50
 
 # Or download arXiv papers
-go run ./cmd/download-arxiv cs.AI 50
+go run ./cmd/korel download arxiv cs.AI 50
 ```
 
 **Output:** `testdata/hn/docs.jsonl` or `testdata/arxiv/docs.jsonl`
@@ -33,7 +33,7 @@ Analyze the corpus to discover stopwords and high-frequency tokens:
 
 ```bash
 # Run analytics with minimal bootstrap configs
-go run ./cmd/korel-analytics \
+go run ./cmd/korel analyze \
   --input=testdata/hn/docs.jsonl \
   --stoplist=testdata/bootstrap/stoplist.yaml \
   --dict=testdata/bootstrap/tokens.dict \
@@ -63,7 +63,7 @@ go run ./cmd/korel-analytics \
 
 ```bash
 # Ingest HN corpus
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   --db=./data/hn.db \
   --data=testdata/hn/docs.jsonl \
   --stoplist=testdata/hn/stoplist.yaml \
@@ -84,7 +84,7 @@ go run ./cmd/rss-indexer \
 
 ```bash
 # One-shot query
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   --db=./data/hn.db \
   --stoplist=testdata/hn/stoplist.yaml \
   --dict=testdata/hn/tokens.dict \
@@ -92,7 +92,7 @@ go run ./cmd/chat-cli \
   --query="open source"
 
 # Interactive mode
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   --db=./data/hn.db \
   --stoplist=testdata/hn/stoplist.yaml \
   --dict=testdata/hn/tokens.dict \
@@ -115,17 +115,17 @@ go run ./cmd/chat-cli \
 
 ```bash
 # 1. Download
-go run ./cmd/download-arxiv cs.AI 50
+go run ./cmd/korel download arxiv cs.AI 50
 
 # 2. Bootstrap (if starting from scratch)
-go run ./cmd/korel-analytics \
+go run ./cmd/korel analyze \
   --input=testdata/arxiv/docs.jsonl \
   --stoplist=testdata/bootstrap/stoplist.yaml \
   --dict=testdata/bootstrap/tokens.dict \
   --taxonomy=testdata/bootstrap/taxonomies.yaml
 
 # 3. Ingest (using pre-seeded configs)
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   --db=./data/arxiv.db \
   --data=testdata/arxiv/docs.jsonl \
   --stoplist=testdata/arxiv/stoplist.yaml \
@@ -133,7 +133,7 @@ go run ./cmd/rss-indexer \
   --taxonomy=testdata/arxiv/taxonomies.yaml
 
 # 4. Query
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   --db=./data/arxiv.db \
   --stoplist=testdata/arxiv/stoplist.yaml \
   --dict=testdata/arxiv/tokens.dict \
@@ -183,7 +183,7 @@ Explain:
 Add LLM review to vet stopword candidates:
 
 ```bash
-go run ./cmd/korel-analytics \
+go run ./cmd/korel analyze \
   --input=testdata/hn/docs.jsonl \
   --stoplist=testdata/bootstrap/stoplist.yaml \
   --dict=testdata/bootstrap/tokens.dict \
@@ -282,7 +282,7 @@ entities:
 ### 2. Run analytics:
 
 ```bash
-go run ./cmd/korel-analytics \
+go run ./cmd/korel analyze \
   --input=your-data.jsonl \
   --stoplist=configs/mydomain/stoplist.yaml \
   --dict=configs/mydomain/tokens.dict \

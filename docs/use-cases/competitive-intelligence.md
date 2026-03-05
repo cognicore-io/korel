@@ -17,13 +17,13 @@ Ingest articles from your own publication and competitor sources:
 
 ```bash
 # Download tech news (or substitute your industry's sources)
-go run ./cmd/download-hn 500
+go run ./cmd/korel download hn 500
 
 # Prepare competitor content as JSONL
 # Each line: {"url": "...", "title": "...", "text": "...", "published_at": "...", "outlet": "competitor-name"}
 
 # Bootstrap discovers topic structure across all sources
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   -input data/industry-corpus.jsonl \
   -domain tech-media \
   -output configs/tech-media
@@ -32,7 +32,7 @@ go run ./cmd/bootstrap \
 ### 2. Index and Categorize
 
 ```bash
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/industry.db \
   -data data/industry-corpus.jsonl \
   -stoplist configs/tech-media/stoplist.yaml \
@@ -45,7 +45,7 @@ go run ./cmd/rss-indexer \
 PMI reveals which topics co-occur across the industry — showing narrative clusters:
 
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/industry.db \
   -stoplist configs/tech-media/stoplist.yaml \
   -dict configs/tech-media/tokens.dict \
@@ -128,7 +128,7 @@ By the time "sovereign AI" appears in analyst reports, you've been covering it f
 Discover which sources drive specific topics:
 
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/industry.db \
   -stoplist configs/tech-media/stoplist.yaml \
   -dict configs/tech-media/tokens.dict \

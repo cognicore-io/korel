@@ -1,4 +1,4 @@
-# Example configuration for cmd/ai-chat
+# Example configuration for korel search --config
 # Copy to configs/ai-chat.yaml and adjust paths as needed.
 db_path: ./data/korel.db
 stoplist: configs/stoplist.yaml

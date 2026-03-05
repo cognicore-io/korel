@@ -24,7 +24,7 @@ Start with raw regulatory texts — no manual taxonomy needed:
 # Each line: {"url": "...", "title": "...", "text": "...", "published_at": "..."}
 
 # Bootstrap discovers domain structure automatically
-go run ./cmd/bootstrap \
+go run ./cmd/korel bootstrap \
   -input data/regulations.jsonl \
   -domain finance-regulation \
   -output configs/finance-regulation
@@ -38,7 +38,7 @@ go run ./cmd/bootstrap \
 ### 2. Ingest and Index
 
 ```bash
-go run ./cmd/rss-indexer \
+go run ./cmd/korel index \
   -db ./data/regulations.db \
   -data data/regulations.jsonl \
   -stoplist configs/finance-regulation/stoplist.yaml \
@@ -78,7 +78,7 @@ for _, s := range result.TaxonomySuggestions {
 When auditors ask "show me everything related to anti-money laundering," the results include score breakdowns:
 
 ```bash
-go run ./cmd/chat-cli \
+go run ./cmd/korel search \
   -db ./data/regulations.db \
   -stoplist configs/finance-regulation/stoplist.yaml \
   -dict configs/finance-regulation/tokens.dict \

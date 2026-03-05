@@ -1,0 +1,116 @@
+sectors:
+  ai:
+    - ai
+    - machine learning
+    - deep learning
+    - neural network
+    - large language model
+    - natural language processing
+    - computer vision
+    - reinforcement learning
+    - language model
+    - transformer
+    - diffusion
+    - llm
+    - gpt
+    - openai
+    - anthropic
+    - midjourney
+    - stable diffusion
+  dev:
+    - open source
+    - software engineering
+    - code review
+    - pull request
+    - version control
+    - unit test
+    - integration test
+    - functional programming
+    - design pattern
+    - software architecture
+    - agile development
+    - package manager
+    - build system
+    - compiler
+    - garbage collection
+    - memory management
+    - real time
+  devops:
+    - continuous integration
+    - continuous deployment
+    - cloud computing
+    - distributed system
+    - load balancer
+    - container
+    - docker
+    - kubernetes
+    - terraform
+    - serverless
+    - infrastructure as code
+    - service mesh
+    - message queue
+    - data pipeline
+    - monitoring
+    - edge computing
+    - cloud native
+  infosec:
+    - security vulnerability
+    - zero day
+    - cross site scripting
+    - sql injection
+    - buffer overflow
+    - denial of service
+    - encryption
+    - public key
+    - private key
+    - access control
+    - authentication
+    - two factor
+    - certificate authority
+  web:
+    - web development
+    - frontend
+    - backend
+    - full stack
+    - progressive web app
+    - user interface
+    - user experience
+    - responsive design
+    - web component
+    - search engine
+    - browser extension
+    - rest api
+    - graphql
+  crypto:
+    - blockchain
+    - cryptocurrency
+    - bitcoin
+    - ethereum
+    - defi
+    - smart contract
+    - nft
+    - web3
+    - token
+    - wallet
+    - mining
+    - consensus
+  startup:
+    - venture capital
+    - series a
+    - product market fit
+    - minimum viable product
+    - growth hacking
+    - business model
+    - revenue
+    - customer acquisition
+    - competitive advantage
+  database:
+    - database
+    - sql
+    - nosql
+    - data warehouse
+    - data science
+    - data mining
+    - big data
+    - data visualization
+    - analytics

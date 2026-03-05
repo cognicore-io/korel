@@ -74,7 +74,7 @@ Stopwords:     "can be" has bigramFrequency=90 but PMI=0.03 → score=2.7 → st
 
 Typical flow for a brand-new dataset:
 
-1. Run the bootstrap CLI (`cmd/bootstrap`) with iterative refinement enabled
+1. Run the bootstrap CLI (`korel bootstrap`) with iterative refinement enabled
 2. Review the generated reports: high-DF/low-PMI tokens (stopword candidates),
    bigram-PMI combined scores (phrase candidates), category coverage
 3. Commit the suggestions into `configs/` (stoplist, taxonomy, dictionary)
