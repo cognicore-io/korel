@@ -4,20 +4,22 @@ import (
 	"github.com/cognicore/korel/pkg/korel/inference"
 	"github.com/cognicore/korel/pkg/korel/ingest"
 	"github.com/cognicore/korel/pkg/korel/pmi"
+	"github.com/cognicore/korel/pkg/korel/reltype"
 	"github.com/cognicore/korel/pkg/korel/store"
 )
 
 // Korel is the main knowledge engine facade
 type Korel struct {
-	store    store.Store
-	pipeline *ingest.Pipeline
-	inf      inference.Engine
-	weights  ScoreWeights
-	halfLife float64
-	pmiCfg   pmi.Config
-	graphCfg GraphConfig
-	concepts map[string]struct{} // dictionary canonicals — used to filter PMI expansion
-	rewriter *Rewriter           // optional query rewriter
+	store      store.Store
+	pipeline   *ingest.Pipeline
+	inf        inference.Engine
+	weights    ScoreWeights
+	halfLife   float64
+	pmiCfg     pmi.Config
+	graphCfg   GraphConfig
+	concepts   map[string]struct{} // dictionary canonicals — used to filter PMI expansion
+	rewriter   *Rewriter           // optional query rewriter
+	relClassifier *reltype.Classifier // optional typed expansion classifier
 }
 
 // ScoreWeights defines the weights for hybrid scoring
@@ -75,9 +77,10 @@ type Options struct {
 	Inference       inference.Engine
 	Weights         ScoreWeights
 	RecencyHalfLife float64
-	PMI             pmi.Config  // PMI computation settings (default: pmi.DefaultConfig())
-	Graph           GraphConfig // Graph edge generation thresholds (default: DefaultGraphConfig())
-	Rewriter        *Rewriter   // optional query rewriter (nil = disabled)
+	PMI             pmi.Config     // PMI computation settings (default: pmi.DefaultConfig())
+	Graph           GraphConfig    // Graph edge generation thresholds (default: DefaultGraphConfig())
+	Rewriter        *Rewriter      // optional query rewriter (nil = disabled)
+	TypedExpansion  *reltype.Config // optional: enable typed edge classification (nil = disabled)
 }
 
 // New creates a Korel instance with the given dependencies.
@@ -103,16 +106,21 @@ func New(opts Options) *Korel {
 	if opts.Pipeline != nil {
 		concepts = opts.Pipeline.KnownConcepts()
 	}
+	var rc *reltype.Classifier
+	if opts.TypedExpansion != nil {
+		rc = reltype.NewClassifier(*opts.TypedExpansion)
+	}
 	return &Korel{
-		store:    opts.Store,
-		pipeline: opts.Pipeline,
-		inf:      opts.Inference,
-		weights:  w,
-		halfLife: hl,
-		pmiCfg:   cfg,
-		graphCfg: gcfg,
-		concepts: concepts,
-		rewriter: opts.Rewriter,
+		store:         opts.Store,
+		pipeline:      opts.Pipeline,
+		inf:           opts.Inference,
+		weights:       w,
+		halfLife:      hl,
+		pmiCfg:        cfg,
+		graphCfg:      gcfg,
+		concepts:      concepts,
+		rewriter:      opts.Rewriter,
+		relClassifier: rc,
 	}
 }
 

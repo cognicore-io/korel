@@ -3,9 +3,11 @@ package korel
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/cognicore/korel/pkg/korel/ingest"
+	"github.com/cognicore/korel/pkg/korel/reltype"
 	"github.com/cognicore/korel/pkg/korel/store"
 )
 
@@ -67,8 +69,8 @@ func (k *Korel) pipelineTaxonomyKeywords() map[string][]string {
 // (PMI co-occurrence, taxonomy, dictionary) and loads them into the inference
 // engine. Idempotent: clears auto-generated edges before repopulating.
 func (k *Korel) BuildGraph(ctx context.Context) error {
-	// 1. Clear old auto-generated edges
-	for _, src := range []string{"pmi", "taxonomy", "dict"} {
+	// 1. Clear old auto-generated edges (including typed edges)
+	for _, src := range []string{"pmi", "taxonomy", "dict", "reltype"} {
 		if err := k.store.DeleteEdgesBySource(ctx, src); err != nil {
 			return fmt.Errorf("clear %s edges: %w", src, err)
 		}
@@ -144,6 +146,17 @@ func (k *Korel) BuildGraph(ctx context.Context) error {
 		}
 	}
 
+	// 2b. Typed edge classification (optional).
+	// When the reltype classifier is enabled, re-examine PMI edges and
+	// classify high-confidence pairs as same_as, broader, or narrower.
+	// These typed edges are stored alongside the original related_to edges
+	// with source="reltype".
+	if k.relClassifier != nil {
+		if err := k.classifyEdges(ctx); err != nil {
+			return fmt.Errorf("classify edges: %w", err)
+		}
+	}
+
 	// 3. Taxonomy edges: category(keyword, category_name)
 	// Source from the pipeline (always has taxonomy data), not the store
 	// (taxonomy tables may be unpopulated).
@@ -191,6 +204,97 @@ func (k *Korel) BuildGraph(ctx context.Context) error {
 	k.loadRuleEdges(edges)
 
 	return nil
+}
+
+// classifyEdges examines existing PMI edges and adds typed edges (same_as,
+// broader, narrower) based on distributional analysis. The original related_to
+// edges are kept — typed edges are stored separately with source="reltype".
+func (k *Korel) classifyEdges(ctx context.Context) error {
+	edges, err := k.store.GetEdgesByRelation(ctx, "related_to", 0)
+	if err != nil {
+		return err
+	}
+
+	// Collect unique tokens from edges
+	tokenSet := make(map[string]struct{})
+	for _, e := range edges {
+		tokenSet[e.Subject] = struct{}{}
+		tokenSet[e.Object] = struct{}{}
+	}
+
+	// Pre-fetch neighbors and DFs for all tokens
+	type tokenInfo struct {
+		neighbors []reltype.Neighbor
+		df        int64
+	}
+	info := make(map[string]*tokenInfo, len(tokenSet))
+	for tok := range tokenSet {
+		neighbors, err := k.store.TopNeighbors(ctx, tok, k.relClassifier.TopK())
+		if err != nil {
+			continue
+		}
+		df, _ := k.store.GetTokenDF(ctx, tok)
+		rtNeighbors := make([]reltype.Neighbor, len(neighbors))
+		for i, nb := range neighbors {
+			rtNeighbors[i] = reltype.Neighbor{Token: nb.Token, PMI: nb.PMI}
+		}
+		info[tok] = &tokenInfo{neighbors: rtNeighbors, df: df}
+	}
+
+	totalDocs, _ := k.store.DocCount(ctx)
+
+	for _, e := range edges {
+		infoA, okA := info[e.Subject]
+		infoB, okB := info[e.Object]
+		if !okA || !okB {
+			continue
+		}
+
+		// Get co-occurrence count for the pair
+		var coAB int64
+		if _, found, err := k.store.GetPMI(ctx, e.Subject, e.Object); err == nil && found {
+			// We need the raw count, but GetPMI returns the score.
+			// Use a heuristic: if PMI edge exists, the pair co-occurs.
+			// For proper classification, get raw count from pair data.
+			coAB = estimateCooccurrence(infoA.df, infoB.df, e.Weight, totalDocs)
+		}
+
+		cl := k.relClassifier.Classify(
+			infoA.neighbors, infoB.neighbors,
+			infoA.df, infoB.df,
+			coAB, totalDocs,
+		)
+
+		if cl.Type == reltype.Related {
+			continue // already stored as related_to
+		}
+
+		if err := k.store.UpsertEdge(ctx, store.Edge{
+			Subject:  e.Subject,
+			Relation: string(cl.Type),
+			Object:   e.Object,
+			Weight:   cl.Confidence,
+			Source:   "reltype",
+		}); err != nil {
+			return fmt.Errorf("upsert typed edge %s -[%s]-> %s: %w",
+				e.Subject, cl.Type, e.Object, err)
+		}
+	}
+	return nil
+}
+
+// estimateCooccurrence estimates the raw co-occurrence count from PMI score
+// and document frequencies. Inverts: PMI = log((N_ab * N) / (N_a * N_b))
+// → N_ab = exp(PMI) * N_a * N_b / N
+func estimateCooccurrence(dfA, dfB int64, pmiScore float64, totalDocs int64) int64 {
+	if totalDocs == 0 || dfA == 0 || dfB == 0 {
+		return 0
+	}
+	nab := math.Exp(pmiScore) * float64(dfA) * float64(dfB) / float64(totalDocs)
+	if nab < 0 {
+		return 0
+	}
+	return int64(nab + 0.5)
 }
 
 // expandViaPMI uses corpus co-occurrence statistics to find tokens that are

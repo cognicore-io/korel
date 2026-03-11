@@ -32,6 +32,15 @@ type SearchRequest struct {
 	MaxHops   int      // 0 = default (2), -1 = disable inference
 	Relations []string // empty = all relations allowed
 
+	// Feature 9: Typed expansion (requires reltype classifier)
+	// Controls which relationship types to follow during expansion.
+	// Empty string or "all" = use expand_token (original behavior).
+	// "synonyms" = only synonym/same_as edges.
+	// "narrower" = only narrower (more specific) concepts.
+	// "broader" = only broader (more general) concepts.
+	// "typed" = all typed edges (synonym + broader + narrower).
+	ExpandMode string
+
 	// Feature 5: Feedback context
 	SessionID string // for tracking feedback
 
@@ -144,13 +153,22 @@ func (k *Korel) Search(ctx context.Context, req SearchRequest) (SearchResponse, 
 	// Expand via symbolic inference (uses fact graph populated by WarmInference)
 	var inferExpanded []string
 	if maxHops > 0 {
-		type depthExpander interface {
-			ExpandWithDepth(tokens []string, maxDepth, maxResults int) []string
-		}
-		if de, ok := k.inf.(depthExpander); ok {
-			inferExpanded = de.ExpandWithDepth(processed.Tokens, maxHops, 50)
+		// Feature 9: Typed expansion — use specific Prolog rules based on ExpandMode
+		expandRule := expandRuleForMode(req.ExpandMode)
+
+		if expandRule != "" {
+			// Use typed expansion via specific Prolog rule
+			inferExpanded = k.expandViaRule(processed.Tokens, expandRule, maxHops)
 		} else {
-			inferExpanded = k.inf.Expand(processed.Tokens)
+			// Default: use expand_token (original behavior)
+			type depthExpander interface {
+				ExpandWithDepth(tokens []string, maxDepth, maxResults int) []string
+			}
+			if de, ok := k.inf.(depthExpander); ok {
+				inferExpanded = de.ExpandWithDepth(processed.Tokens, maxHops, 50)
+			} else {
+				inferExpanded = k.inf.Expand(processed.Tokens)
+			}
 		}
 		// Feature 4: Filter by allowed relations if specified
 		if len(req.Relations) > 0 {
@@ -550,3 +568,45 @@ type searchDensityProvider struct {
 
 func (p *searchDensityProvider) NeighborCount(_ string, _ float64) int { return p.neighborCount }
 func (p *searchDensityProvider) VocabSize() int                       { return p.vocabSize }
+
+// expandRuleForMode maps ExpandMode strings to Prolog rule names.
+// Returns empty string for default/untyped expansion.
+func expandRuleForMode(mode string) string {
+	switch mode {
+	case "synonyms":
+		return "expand_synonym"
+	case "broader":
+		return "expand_broader"
+	case "narrower":
+		return "expand_narrower"
+	case "typed":
+		return "expand_typed"
+	default:
+		return "" // use original expand_token via Expand()
+	}
+}
+
+// expandViaRule queries a specific Prolog expansion rule for each token.
+func (k *Korel) expandViaRule(tokens []string, rule string, maxHops int) []string {
+	origSet := make(map[string]struct{}, len(tokens))
+	for _, t := range tokens {
+		origSet[t] = struct{}{}
+	}
+
+	// Use QueryAll to query the specific rule
+	seen := make(map[string]struct{})
+	for _, tok := range tokens {
+		results := k.inf.QueryAll(rule, tok)
+		for _, r := range results {
+			if _, isOrig := origSet[r]; !isOrig {
+				seen[r] = struct{}{}
+			}
+		}
+	}
+
+	out := make([]string, 0, len(seen))
+	for tok := range seen {
+		out = append(out, tok)
+	}
+	return out
+}

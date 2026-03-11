@@ -31,6 +31,8 @@ func New() (*Engine, error) {
 	dynamics := []string{
 		"related_to", "category", "synonym", "is_a",
 		"used_for", "part_of", "co_entity",
+		// Typed expansion relations (populated by reltype classifier)
+		"same_as", "broader", "narrower",
 	}
 	for _, pred := range dynamics {
 		if err := interp.Exec(fmt.Sprintf(":- dynamic(%s/2).", pred)); err != nil {

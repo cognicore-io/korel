@@ -390,5 +390,62 @@ func TestPrologComposedExpansion(t *testing.T) {
 	t.Logf("Expanded 'query term': %v", expanded)
 }
 
+func TestPrologTypedExpansion(t *testing.T) {
+	e := newTestEngine(t)
+
+	// Add typed edges
+	e.AddFact("same_as", "k8s", "kubernetes")
+	e.AddFact("broader", "pod", "kubernetes")
+	e.AddFact("narrower", "kubernetes", "pod")
+	e.AddFact("narrower", "kubernetes", "deployment")
+	e.AddFact("broader", "deployment", "kubernetes")
+	e.AddFact("broader", "kubernetes", "container-orchestration")
+
+	// expand_synonym should find synonyms
+	syns := e.QueryAll("expand_synonym", "k8s")
+	if !contains(syns, "kubernetes") {
+		t.Errorf("expand_synonym(k8s) should include kubernetes, got %v", syns)
+	}
+
+	// expand_broader should go up
+	broader := e.QueryAll("expand_broader", "pod")
+	if !contains(broader, "kubernetes") {
+		t.Errorf("expand_broader(pod) should include kubernetes, got %v", broader)
+	}
+	// Transitive: pod → kubernetes → container-orchestration
+	if !contains(broader, "container-orchestration") {
+		t.Errorf("expand_broader(pod) should include container-orchestration (transitive), got %v", broader)
+	}
+
+	// expand_narrower should go down
+	narrower := e.QueryAll("expand_narrower", "kubernetes")
+	if !contains(narrower, "pod") {
+		t.Errorf("expand_narrower(kubernetes) should include pod, got %v", narrower)
+	}
+	if !contains(narrower, "deployment") {
+		t.Errorf("expand_narrower(kubernetes) should include deployment, got %v", narrower)
+	}
+
+	// expand_typed should combine all
+	typed := e.QueryAll("expand_typed", "k8s")
+	if !contains(typed, "kubernetes") {
+		t.Errorf("expand_typed(k8s) should include kubernetes (synonym), got %v", typed)
+	}
+
+	t.Logf("Synonyms of k8s: %v", syns)
+	t.Logf("Broader than pod: %v", broader)
+	t.Logf("Narrower than kubernetes: %v", narrower)
+	t.Logf("All typed for k8s: %v", typed)
+}
+
+func contains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 // ensure fmt is used
 var _ = fmt.Sprintf
