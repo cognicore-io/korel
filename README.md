@@ -221,6 +221,8 @@ Inspired by decades of proven research (IBM n-grams, expert systems, "web as cor
   agents can combine Korel's deterministic retrieval with neural generation.
 - See [`docs/AGENT_INTEGRATION.md`](docs/AGENT_INTEGRATION.md) for detailed patterns,
   including MCP/tool wiring and suggestions for prompt templates.
+- See [`docs/TYPED-EXPANSION.md`](docs/TYPED-EXPANSION.md) for typed query expansion
+  (synonym, broader, narrower) using distributional relationship classification.
 
 ### Hybrid Architecture: Statistical + Symbolic
 
@@ -279,27 +281,34 @@ The reusable Go library providing the core functionality:
 ```
 pkg/korel/
 ├── korel.go              # Public API facade (Ingest, Search, AutoTune, RebuildPipeline)
+├── search.go             # SearchRequest, ExpandMode, expansion logic
+├── graph.go              # Graph building, edge classification, WarmInference
+├── mode.go               # SearchMode detection (Fact/Trend/Compare/Explore)
+├── rewrite.go            # Query rewriting (dictionary-based canonicalization)
+├── feedback.go           # User feedback recording & stats
 ├── store/                # Storage interface + implementations
 │   ├── store.go          #    - Interface: Store, StoplistView, DictView, TaxonomyView
 │   ├── memstore/         #    - In-memory impl (interned int32 keys, lazy adjacency)
-│   └── sqlite/           #    - SQLite impl (WAL, 13 tables incl. stoplist/dict/taxonomy)
+│   └── sqlite/           #    - SQLite impl (WAL, 13+ tables incl. edges, feedback)
 ├── ingest/               # Tokenization, multi-token, taxonomy
 ├── lexicon/              # Synonym normalization & c-token relationships
 ├── analytics/            # Corpus analysis (parallel ProcessBatch, fused ComputeAll)
 ├── pmi/                  # Co-occurrence counting & PMI/NPMI calc
-├── rank/                 # Hybrid scoring with density-based damping
+├── rank/                 # Hybrid scoring (PMI + BM25 + title + damping)
 ├── cards/                # Card synthesis & explainability
 ├── query/                # Query parsing & retrieval
+├── reltype/              # Distributional relationship classifier (synonym/broader/narrower)
 ├── inference/            # Symbolic reasoning engine
 │   ├── inference.go      #    - Interface for swappable engines
-│   └── simple/           #    - Pure Go engine (multi-hop BFS, confidence decay)
+│   ├── simple/           #    - Pure Go engine (multi-hop BFS, confidence decay)
+│   └── prolog/           #    - Full Prolog engine (directional typed expansion rules)
 ├── signals/              # Density damping, collision detection, prediction error
 ├── stoplist/             # Self-adjusting stopword management
-├── autotune/             # Iterative stopword + rule discovery
+├── autotune/             # Iterative stopword + rule + taxonomy discovery
 │   ├── stopwords/        #    - Stopword candidate detection
 │   ├── rules/            #    - PMI→rule auto-generation
 │   ├── entities/         #    - Entity extraction tuning
-│   └── taxonomy/         #    - Taxonomy refinement
+│   └── taxonomy/         #    - Taxonomy drift detection & refinement
 ├── maintenance/          # Partial reindex, rule export
 └── config/               # Config loaders (YAML)
 ```
@@ -311,9 +320,15 @@ pkg/korel/
 - Updates PMI scores incrementally
 
 **2. Search** (`korel search`)
-- Interactive Q&A interface
-- Queries Korel before LLM call
+- Interactive Q&A interface (or one-shot with `-query`)
+- SearchMode detection adjusts weights per query intent
+- Typed expansion via ExpandMode (synonym, broader, narrower)
 - Shows explainable cards with sources
+
+**3. Graph Explorer** (`korel graph`)
+- Interactive REPL for navigating the knowledge graph
+- Browse typed edges (is_a, related_to, synonym, broader/narrower)
+- Inspect relationship classifications from the `reltype` package
 
 ### Test Data (`testdata/`)
 
@@ -374,11 +389,13 @@ Low PMI → weak/random co-occurrence
 Unlike pure vector similarity, Korel ranks results using transparent weights:
 
 ```
-score = α·PMI·damping + β·category_overlap + γ·recency + η·authority + θ·inference - δ·length_penalty
+score = α·PMI·damping + ζ·BM25 + ι·title + β·category_overlap + γ·recency + η·authority + θ·inference - δ·length_penalty
 ```
 
 Default weights (tunable):
 - α = 1.0 (PMI importance, scaled by per-token damping factor)
+- ζ = 0.4 (BM25 term relevance, K1=1.2, B=0.35)
+- ι = 0.3 (title match boost)
 - β = 0.6 (category matching)
 - γ = 0.8 (recency, exponential decay)
 - η = 0.2 (link authority)
@@ -411,7 +428,7 @@ alternative_to(lstm, transformer)
 1. **Transitive Closure**: If `bert is_a transformer` and `transformer is_a neural-network`, infer `bert is_a neural-network`
 2. **Query Expansion**: Query "bert" expands to `[bert, transformer, neural-network, attention-mechanism]`
 3. **Proof Chains**: Every inference step is recorded and shown to user
-4. **Swappable**: Simple Go engine now, can upgrade to full Prolog/golog later
+4. **Swappable**: Two engines available — simple Go BFS engine and full Prolog engine with directional typed expansion rules
 
 **Example Query Flow:**
 ```
@@ -753,6 +770,8 @@ stoplist_path: testdata/hn/stoplist.yaml
 
 score_weights:
   alpha_pmi: 1.0
+  zeta_bm25: 0.4
+  iota_title: 0.3
   beta_cats: 0.6
   gamma_recency: 0.8
   eta_authority: 0.2
@@ -867,8 +886,20 @@ Benchmarked on the TinyStories corpus (simple English narratives) using iterativ
 - ✅ Density-based damping (hub tokens get reduced PMI influence)
 - ✅ Multi-hop inference (BFS expansion with confidence decay)
 - ✅ Full SQLite parity (stoplist, dict, taxonomy tables + views)
-- [ ] Taxonomy drift detection
+- ✅ Taxonomy drift detection (`autotune/taxonomy` — coverage + orphan detection)
 - [ ] LLM-assisted synonym expansion
+
+### Phase 2b: Retrieval Intelligence
+- ✅ BM25 term-relevance scoring (K1/B tunable, fused into hybrid formula)
+- ✅ Title match boost (separate weight, tokens matched against query)
+- ✅ SearchMode detection (Fact / Trend / Compare / Explore with per-mode weight multipliers)
+- ✅ Typed expansion (`reltype` classifier: synonym / broader / narrower / related)
+- ✅ ExpandMode in search (select expansion strategy: synonym-only, broader, narrower, typed)
+- ✅ Prolog inference engine (`inference/prolog` — full engine alongside simple Go engine)
+- ✅ Query rewriting (dictionary-based synonym canonicalization before search)
+- ✅ Graph exploration REPL (`korel graph` — interactive edge navigation)
+- ✅ Feedback recording (click/dismiss events, aggregated stats for adaptive ranking)
+- ✅ Output formats (cards, briefing, memo, digest, watchlist)
 
 ### Phase 3: Production
 - [ ] PostgreSQL backend
@@ -952,9 +983,11 @@ First system to integrate 1990s statistical methods (PMI) with 1980s symbolic AI
 - Symbols encode knowledge but can't discover new patterns
 - **Together** they provide both discovery and explainability
 
-### 2. **Pure Go Inference Engine**
-Minimal symbolic reasoning engine in pure Go with:
-- Swappable interface (start simple, upgrade to full Prolog)
+### 2. **Dual Inference Engines in Pure Go**
+Two symbolic reasoning engines, both in pure Go:
+- **Simple engine**: multi-hop BFS with 0.7× confidence decay, ideal for fast expansion
+- **Prolog engine**: full rule engine with directional typed expansion (`expand_synonym`, `expand_broader`, `expand_narrower`)
+- Swappable via common interface — choose per use case
 - Transitive closure for taxonomies
 - Proof chain generation
 - No external dependencies (no Python/shell bridges)
@@ -962,7 +995,7 @@ Minimal symbolic reasoning engine in pure Go with:
 ### 3. **Explainable Hybrid Scoring**
 Extended transparent scoring formula:
 ```
-score = α·PMI + β·categories + γ·recency + η·authority + θ·inference - δ·length
+score = α·PMI + ζ·BM25 + ι·title + β·categories + γ·recency + η·authority + θ·inference - δ·length
 ```
 Every component is measurable, tunable, and explainable to auditors.
 
